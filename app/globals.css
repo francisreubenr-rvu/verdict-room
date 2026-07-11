@@ -1,0 +1,139 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-source-serif);
+  --font-serif: var(--font-source-serif);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-source-serif);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* Warm paperback palette — see DESIGN.md for the full token rationale. */
+:root {
+  --background: #f4eee0;
+  --foreground: #2b2116;
+  --card: #fbf7ec;
+  --card-foreground: #2b2116;
+  --popover: #fbf7ec;
+  --popover-foreground: #2b2116;
+  --primary: #b14a2b;
+  --primary-foreground: #fbf7ec;
+  --secondary: #e4d9be;
+  --secondary-foreground: #2b2116;
+  --muted: #eae1cb;
+  --muted-foreground: #6b5d45;
+  --accent: #d8cba0;
+  --accent-foreground: #2b2116;
+  --destructive: #a23325;
+  --border: #c7b896;
+  --input: #c7b896;
+  --ring: #b14a2b;
+  --chart-1: #b14a2b;
+  --chart-2: #6b5d45;
+  --chart-3: #8a7a52;
+  --chart-4: #d8cba0;
+  --chart-5: #2b2116;
+  --radius: 0.375rem;
+  --sidebar: #eae1cb;
+  --sidebar-foreground: #2b2116;
+  --sidebar-primary: #b14a2b;
+  --sidebar-primary-foreground: #fbf7ec;
+  --sidebar-accent: #d8cba0;
+  --sidebar-accent-foreground: #2b2116;
+  --sidebar-border: #c7b896;
+  --sidebar-ring: #b14a2b;
+  --grid-line: color-mix(in oklch, var(--foreground), transparent 92%);
+}
+
+.dark {
+  --background: #1e1810;
+  --foreground: #f0e6d2;
+  --card: #241d14;
+  --card-foreground: #f0e6d2;
+  --popover: #241d14;
+  --popover-foreground: #f0e6d2;
+  --primary: #d97052;
+  --primary-foreground: #1e1810;
+  --secondary: #362c1d;
+  --secondary-foreground: #f0e6d2;
+  --muted: #2e2517;
+  --muted-foreground: #b3a487;
+  --accent: #3c3020;
+  --accent-foreground: #f0e6d2;
+  --destructive: #d97052;
+  --border: #443725;
+  --input: #443725;
+  --ring: #d97052;
+  --chart-1: #d97052;
+  --chart-2: #b3a487;
+  --chart-3: #a89664;
+  --chart-4: #3c3020;
+  --chart-5: #f0e6d2;
+  --sidebar: #241d14;
+  --sidebar-foreground: #f0e6d2;
+  --sidebar-primary: #d97052;
+  --sidebar-primary-foreground: #1e1810;
+  --sidebar-accent: #3c3020;
+  --sidebar-accent-foreground: #f0e6d2;
+  --sidebar-border: #443725;
+  --sidebar-ring: #d97052;
+  --grid-line: color-mix(in oklch, var(--foreground), transparent 94%);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    /* Subtle paper grid — see DESIGN.md "Surface" section. */
+    background-image:
+      linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+  html {
+    @apply font-sans;
+  }
+}

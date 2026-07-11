@@ -1,0 +1,102 @@
+// PurchasePilot — Prisma schema (Postgres/Supabase)
+// Schema mirrors PLAN.md §4 exactly. Do not diverge without updating the plan first.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  // Pooled connection (Supabase pgbouncer, port 6543) — used at runtime by the app.
+  url       = env("DATABASE_URL")
+  // Direct connection (port 5432) — used by Prisma Migrate/db push, which need a
+  // non-pooled connection. Standard Supabase + Prisma setup pattern.
+  directUrl = env("DIRECT_URL")
+}
+
+enum Platform {
+  youtube
+  reddit
+  web
+}
+
+enum Sponsorship {
+  organic
+  sponsored
+  affiliate
+}
+
+enum Sentiment {
+  pro
+  con
+  neutral
+}
+
+model ResearchSession {
+  id              String   @id @default(cuid())
+  userId          String                        // Supabase Auth user id (auth.uid()) — see §4a
+  query           String
+  parsed          Json                          // {product, useCase, budget}
+  status          String   @default("queued")   // queued|searching|fetching|extracting|synthesizing|done|failed
+  expectedSources Int      @default(0)          // set at end of Search step; process-source calls compare against this to detect "last one done"
+  verdictJson     Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  sources         SessionSource[]
+  options         Option[]
+
+  @@index([userId])
+}
+
+// join table: many sessions can share one cached Source
+model SessionSource {
+  sessionId String
+  session   ResearchSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sourceId  String
+  source    Source          @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([sessionId, sourceId])
+  @@index([sourceId])
+}
+
+model Source {
+  id                String       @id @default(cuid())
+  url               String       @unique   // cache key — fetched + extracted once per 30-day window
+  platform          Platform
+  author            String?
+  sponsorship       Sponsorship?
+  sponsorConfidence Float?
+  summary           String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt  // drives the 30-day freshness check in §3 step 2
+  sessions          SessionSource[]
+  findings          Finding[]
+}
+
+model Finding {
+  id        String    @id @default(cuid())
+  sourceId  String
+  source    Source    @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  option    String               // free-text; canonicalized into Option rows at synthesis time
+  claim     String
+  sentiment Sentiment
+  quote     String
+  createdAt DateTime  @default(now())
+
+  @@index([sourceId])
+}
+
+model Option {
+  id        String   @id @default(cuid())
+  sessionId String
+  session   ResearchSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  name      String
+  score     Float
+  pros      String[]
+  cons      String[]
+  rank      Int
+  createdAt DateTime @default(now())
+
+  @@index([sessionId])
+}
