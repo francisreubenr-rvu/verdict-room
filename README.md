@@ -1,36 +1,40 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# PurchasePilot
 
-## Getting Started
+> One input in. Hours of review-watching and review-reading, distilled into a verdict you can trust.
 
-First, run the development server:
+Takes a single natural-language purchase query (e.g. "Best noise-cancelling headphones under $300
+for travel, I have an iPhone") and returns a synthesized, sourced report: ranked options, evidence
+with links, a sponsored-vs-organic split, common complaints, and a final verdict.
+
+## Stack
+
+| Layer | Choice |
+|---|---|
+| Framework | Next.js 16 (App Router), TypeScript, Bun |
+| UI | Tailwind CSS 4, shadcn/ui, Zustand, TanStack Query |
+| Data | Prisma → Supabase Postgres |
+| Auth | Supabase Auth (Google Sign-In only) |
+| LLM | Anthropic Claude (`@anthropic-ai/sdk`) |
+| Search | Google Custom Search API |
+| Deploy | Vercel (`@vercel/functions` `waitUntil` for the chained research pipeline) |
+
+## Running locally
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+bun install
+cp .env.local.example .env.local   # fill in real values — see PLAN.md §2 for what each secret is
+bunx prisma generate
+bun dev                             # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+A live Supabase project (Postgres + Auth + Google OAuth provider configured) is required before
+`bunx prisma db push`, login, or the research pipeline work end-to-end — that's a manual dashboard
+step, not something `bun dev` provisions for you.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Docs
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| File | Contents |
+|---|---|
+| `PLAN.md` | Architecture, data model, pipeline design, milestones — plan of record |
+| `AGENTS.md` | Project conventions for anyone (human or agent) working in this repo |
+| `DESIGN.md` | Design tokens, typography, spacing — source of truth is `app/globals.css` if they drift |

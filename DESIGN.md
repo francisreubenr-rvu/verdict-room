@@ -64,5 +64,15 @@ stamped than the rounded-corner default.
 
 ## Spacing / layout
 
-No custom spacing scale for M1 — Tailwind defaults. Revisit at M4/M5 when the results dashboard
-needs a denser information layout (source lists, pros/cons columns).
+M5 revisit, decided: the results dashboard uses two densities, not one uniform scale.
+
+| Area | Spacing | Why |
+|---|---|---|
+| `SourceCard` (`source-list.tsx`) | `Card size="sm"` (`--card-spacing: 0.75rem`/12px, vs. the 1rem/16px default) | Each card packs platform, author, sponsorship badge, summary, and URL — the default padding read as too loose for that much metadata per row. |
+| Cards within one source-list section | `gap-3` (12px) | Tight, scannable — same-group items. |
+| Between source-list sections (organic / sponsored / unclassified) | `gap-8` (32px) | Deliberately looser than within-section — keeps the sponsored-vs-organic split, the product's core differentiator, visually distinct rather than blurring into one long list. |
+| Verdict ranked-option cards (`verdict.tsx`) | Default `p-4` card padding, `gap-4` between options | Fewer, denser blocks (name/score/pros/cons) than the source list — the looser default reads better here than the source-list's tight scale would. |
+| Verdict pros/cons grid | `gap-3` between columns (`sm:grid-cols-2`, single column below `sm`) | Matches the source-list's tight scale since it's the same kind of short scannable list. |
+
+No new Tailwind spacing tokens were added — `gap-3`/`gap-4`/`gap-8` and the existing `size="sm"`
+card variant already cover the dashboard's density needs.

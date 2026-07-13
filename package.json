@@ -6,9 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.111.0",
     "@base-ui/react": "^1.6.0",
     "@prisma/client": "^6",
     "@supabase/ssr": "^0.12.0",
