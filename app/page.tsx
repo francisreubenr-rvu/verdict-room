@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { SiteHeader } from "@/components/site-header";
 import { isTerminalStatus, type ResearchSessionSummary } from "@/components/research-types";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -116,17 +117,7 @@ export default function Home() {
 
   return (
     <div className="flex flex-1 flex-col">
-      <header className="flex items-center justify-between border-b-2 border-foreground px-4 py-4 sm:px-6">
-        <span className="font-serif text-lg font-semibold tracking-tight">
-          PurchasePilot
-        </span>
-        <Link
-          href="/login"
-          className="font-mono text-sm text-muted-foreground hover:text-foreground"
-        >
-          Sign in
-        </Link>
-      </header>
+      <SiteHeader />
 
       <main className="flex flex-1 flex-col items-center px-4 py-14 sm:px-6 sm:py-20">
         <div className="w-full max-w-2xl text-center">

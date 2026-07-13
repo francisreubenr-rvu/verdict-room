@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ProgressTracker } from "@/components/progress-tracker";
 import { ReportCard } from "@/components/report-card";
 import { SourceList } from "@/components/source-list";
+import { SiteHeader } from "@/components/site-header";
 import {
   isTerminalStatus,
   type ResearchSessionResponse,
@@ -22,19 +23,6 @@ async function fetchResearchSession(
     throw new Error(`Failed to load research session (${res.status})`);
   }
   return res.json();
-}
-
-function SiteHeader() {
-  return (
-    <header className="flex items-center justify-between border-b-2 border-foreground px-6 py-4">
-      <Link
-        href="/"
-        className="font-serif text-lg font-semibold tracking-tight"
-      >
-        PurchasePilot
-      </Link>
-    </header>
-  );
 }
 
 function CenteredMessage({
