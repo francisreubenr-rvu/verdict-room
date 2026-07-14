@@ -1,8 +1,5 @@
-import { Check } from "lucide-react";
-
 import { cn } from "@/lib/utils";
-import { Progress } from "@/components/ui/progress";
-import { PIPELINE_STEPS, type PipelineStep } from "@/components/research-types";
+import { PIPELINE_STEPS, type PipelineStep, type ResearchSource } from "@/components/research-types";
 
 const STEP_LABELS: Record<PipelineStep, string> = {
   queued: "Queued",
@@ -13,71 +10,104 @@ const STEP_LABELS: Record<PipelineStep, string> = {
 };
 
 interface ProgressTrackerProps {
+  query: string;
   status: string;
-  sourcesCount: number;
+  sources: ResearchSource[];
   expectedSources: number;
 }
 
 export function ProgressTracker({
+  query,
   status,
-  sourcesCount,
+  sources,
   expectedSources,
 }: ProgressTrackerProps) {
   const currentIndex = PIPELINE_STEPS.indexOf(status as PipelineStep);
-  const showSourceCount = expectedSources > 0 && currentIndex >= PIPELINE_STEPS.indexOf("fetching");
+  const flaggedCount = sources.filter(
+    (s) => s.sponsorship === "sponsored" || s.sponsorship === "affiliate"
+  ).length;
+  const pct =
+    expectedSources > 0
+      ? Math.round((Math.min(sources.length, expectedSources) / expectedSources) * 100)
+      : Math.round(((currentIndex + 1) / PIPELINE_STEPS.length) * 100);
 
   return (
-    <div className="rounded-lg border-2 border-foreground bg-card p-6 shadow-[4px_4px_0_0_var(--color-foreground)]">
-      <h2 className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
-        Research in progress
-      </h2>
+    <div className="flex flex-col gap-5">
+      <div className="flex items-center gap-3 rounded-2xl bg-well px-5 py-3.5 shadow-[var(--shadow-well)]">
+        <span className="font-mono text-sm font-bold text-primary">&gt;</span>
+        <span className="flex-1 truncate font-serif text-base italic text-[#5a4a32]">
+          {query}
+        </span>
+      </div>
 
-      <ol className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-2">
-        {PIPELINE_STEPS.map((step, index) => {
-          const isComplete = currentIndex > index;
-          const isActive = currentIndex === index;
-
-          return (
-            <li key={step} className="flex flex-1 items-center gap-2 sm:flex-col sm:items-start">
-              <span
-                className={cn(
-                  "flex size-6 shrink-0 items-center justify-center rounded-full border-2 border-foreground font-mono text-xs",
-                  isComplete && "bg-primary text-primary-foreground",
-                  isActive && "bg-accent text-accent-foreground",
-                  !isComplete && !isActive && "bg-transparent text-muted-foreground"
-                )}
-              >
-                {isComplete ? <Check className="size-3.5" /> : index + 1}
-              </span>
-              <span
-                className={cn(
-                  "font-mono text-sm",
-                  isActive && "font-semibold text-foreground",
-                  isComplete && "text-foreground",
-                  !isComplete && !isActive && "text-muted-foreground"
-                )}
-              >
-                {STEP_LABELS[step]}
-                {isActive ? "…" : ""}
-              </span>
-            </li>
-          );
-        })}
-      </ol>
-
-      {showSourceCount ? (
-        <div className="mt-6">
-          <Progress
-            value={Math.min(sourcesCount, expectedSources)}
-            max={expectedSources}
-            className="flex-col items-stretch gap-1.5"
-          >
-            <span className="font-mono text-xs text-muted-foreground">
-              {sourcesCount} / {expectedSources} sources processed
-            </span>
-          </Progress>
+      <div className="rounded-[28px] bg-card px-7 py-7 shadow-[var(--shadow-raised-lg)] sm:px-8">
+        <div className="flex items-baseline justify-between gap-3.5">
+          <span className="font-mono text-[11px] font-bold tracking-widest text-primary/80">
+            PIPELINE
+          </span>
+          <span className="font-serif text-4xl font-extrabold tracking-tight">
+            {pct}
+            <span className="text-xl">%</span>
+          </span>
         </div>
-      ) : null}
+
+        <div className="mt-3.5 h-4 overflow-hidden rounded-full bg-well shadow-[var(--shadow-well)]">
+          <div
+            className="h-full rounded-full bg-[linear-gradient(145deg,var(--primary-light),var(--primary))] transition-[width] duration-700 ease-out"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+
+        <div className="mt-6 flex items-start justify-between">
+          {PIPELINE_STEPS.map((step, index) => {
+            const isComplete = currentIndex > index;
+            const isActive = currentIndex === index;
+            return (
+              <div key={step} className="flex flex-1 flex-col items-center gap-2">
+                <span
+                  className={cn(
+                    "flex size-9 items-center justify-center rounded-full font-mono text-[11px] font-bold transition-colors",
+                    isComplete &&
+                      "bg-[linear-gradient(145deg,var(--primary-light),var(--primary))] text-primary-foreground",
+                    isActive &&
+                      "animate-pulse bg-[linear-gradient(145deg,var(--accent-light),var(--accent))] text-accent-foreground",
+                    !isComplete && !isActive && "bg-well text-muted-foreground shadow-[var(--shadow-well)]"
+                  )}
+                >
+                  {isComplete ? "✓" : index + 1}
+                </span>
+                <span
+                  className={cn(
+                    "font-mono text-[9px] tracking-wide",
+                    isActive || isComplete ? "font-bold text-foreground" : "text-muted-foreground"
+                  )}
+                >
+                  {STEP_LABELS[step].toUpperCase()}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="mt-7 grid grid-cols-2 gap-3.5">
+          <div className="rounded-2xl bg-well px-4 py-3.5 text-center shadow-[var(--shadow-well)]">
+            <div className="font-serif text-2xl font-extrabold">{sources.length}</div>
+            <div className="font-mono text-[9.5px] tracking-wide text-muted-foreground">
+              SOURCES FOUND
+            </div>
+          </div>
+          <div className="rounded-2xl bg-well px-4 py-3.5 text-center shadow-[var(--shadow-well)]">
+            <div className="font-serif text-2xl font-extrabold text-primary">{flaggedCount}</div>
+            <div className="font-mono text-[9.5px] tracking-wide text-muted-foreground">
+              PAID VOICES FLAGGED
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="text-center font-mono text-[10.5px] tracking-wide text-muted-foreground">
+        YOU CAN LEAVE — WE&apos;LL KEEP READING. THE REPORT SAVES TO YOUR DESK.
+      </div>
     </div>
   );
 }

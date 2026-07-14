@@ -87,7 +87,8 @@ cp .env.local.example .env.local
 ```
 
 Fill in every value in `.env.local` from steps a, c, d, e above (Google OAuth Client ID/Secret from
-step b are *not* entered here — they live only in the Supabase dashboard). Then:
+step b are *not* entered here — they live only in the Supabase dashboard; the `STRIPE_*` values
+come later, from step h). Then:
 
 ```bash
 bunx prisma db push       # pushes prisma/schema.prisma to the real Supabase Postgres DB
@@ -144,7 +145,29 @@ actually applies to app traffic on `ResearchSession`/`Option`.
 
 ---
 
-## h. Vercel project + environment variables
+## h. Stripe — Pro subscription billing
+
+Real subscription billing (SITE-REDESIGN-PLAN.md §Stage C), not a mockup — the Pricing page's
+"Go Pro" button hits real Stripe Checkout, and a webhook keeps plan status in sync.
+
+1. https://dashboard.stripe.com/register → create an account (use **test mode** for local dev;
+   switch to live keys only once ready to actually charge people).
+2. **Product catalog → Add product** → name it (e.g. "PurchasePilot Pro"), add a **recurring**
+   price: $12.00/month. Copy the **Price ID** (`price_...`, not the Product ID) → `STRIPE_PRO_PRICE_ID`.
+3. **Developers → API keys** → copy the **Secret key** (`sk_test_...` in test mode) → `STRIPE_SECRET_KEY`.
+4. **Developers → Webhooks → Add endpoint** → URL: `https://<your-domain>/api/billing/webhook`
+   (for local testing, use the Stripe CLI: `stripe listen --forward-to localhost:3000/api/billing/webhook`,
+   which prints a `whsec_...` you can use locally without a public URL). Select events:
+   `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`.
+   Copy the **Signing secret** (`whsec_...`) → `STRIPE_WEBHOOK_SECRET`.
+5. Enter all three values into `.env.local` (or Vercel env vars — step i).
+
+To test a subscription end-to-end without a real card: Stripe test mode accepts `4242 4242 4242
+4242` with any future expiry/CVC on the Checkout page.
+
+---
+
+## i. Vercel project + environment variables
 
 1. https://vercel.com/new → import this Git repository (push it to GitHub/GitLab first if it isn't
    already remote — confirmed via the Vercel MCP `list_projects` tool that no project named
@@ -165,6 +188,10 @@ actually applies to app traffic on `ResearchSession`/`Option`.
    - `REDDIT_CLIENT_SECRET`
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `STRIPE_SECRET_KEY`
+   - `STRIPE_PRO_PRICE_ID`
+   - `STRIPE_WEBHOOK_SECRET` (the production Stripe CLI/dashboard webhook endpoint's signing
+     secret — different from the local `stripe listen` one in step h.4)
    Apply each to Production (and Preview/Development if you want preview deploys to work too).
 5. In Google Cloud Console (step b), add the production Vercel domain's callback flow: Supabase
    Auth already handles the OAuth redirect via its own callback URL (already authorized in step
@@ -175,7 +202,7 @@ actually applies to app traffic on `ResearchSession`/`Option`.
 
 ---
 
-## i. Deploy
+## j. Deploy
 
 1. Trigger the first deploy (push to the connected branch, or **Deploy** from the Vercel dashboard
    import screen).
@@ -183,6 +210,10 @@ actually applies to app traffic on `ResearchSession`/`Option`.
 3. Once live, sign in with Google end-to-end, run one real research query, and confirm a session
    completes (`queued → ... → done`) and rows land in Supabase (`ResearchSession`, `Source`,
    `Finding`, `Option`).
-4. If anything fails at runtime with an auth/DB error, re-check step g (RLS policy) and step h.5
+4. Add a **production** webhook endpoint in the Stripe dashboard (step h.4) pointing at
+   `https://<your-real-domain>/api/billing/webhook` — the local `stripe listen` one only covers
+   dev. Run a test Pro subscription end-to-end (test card `4242 4242 4242 4242`) and confirm the
+   `Subscription` row flips to `plan: pro`.
+5. If anything fails at runtime with an auth/DB error, re-check step g (RLS policy) and step i.5
    (Site URL) first — those are the two steps most likely to silently pass a build but fail at
    runtime.

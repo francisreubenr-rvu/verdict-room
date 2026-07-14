@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ProgressTracker } from "@/components/progress-tracker";
 import { ReportCard } from "@/components/report-card";
 import { SourceList } from "@/components/source-list";
-import { SiteHeader } from "@/components/site-header";
+import { AppFooter } from "@/components/footer";
 import {
   isTerminalStatus,
   type ResearchSessionResponse,
@@ -34,13 +34,13 @@ function CenteredMessage({
 }) {
   return (
     <div className="flex flex-1 flex-col">
-      <SiteHeader />
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-center justify-center gap-4 px-6 py-20 text-center">
+      <main className="mx-auto flex w-full max-w-[880px] flex-1 flex-col items-center justify-center gap-5 px-4 py-20 text-center sm:px-6">
         <p className="font-serif text-lg text-foreground">{message}</p>
-        <Link href="/" className={buttonVariants({ size: "lg" })}>
+        <Link href="/app" className={buttonVariants({ size: "lg" })}>
           {linkLabel}
         </Link>
       </main>
+      <AppFooter />
     </div>
   );
 }
@@ -62,11 +62,11 @@ export default function ResearchSessionPage() {
   if (isPending) {
     return (
       <div className="flex flex-1 flex-col">
-        <SiteHeader />
-        <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-12">
-          <Skeleton className="h-6 w-1/2" />
-          <Skeleton className="mt-6 h-40 w-full" />
+        <main className="mx-auto w-full max-w-[880px] flex-1 px-4 py-12 sm:px-6">
+          <Skeleton className="h-6 w-1/2 rounded-xl" />
+          <Skeleton className="mt-6 h-40 w-full rounded-3xl" />
         </main>
+        <AppFooter />
       </div>
     );
   }
@@ -93,24 +93,30 @@ export default function ResearchSessionPage() {
 
   return (
     <div className="flex flex-1 flex-col">
-      <SiteHeader />
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-6 py-12">
+      <main className="mx-auto flex w-full max-w-[880px] flex-1 flex-col gap-9 px-4 py-12 sm:px-6">
         {!isDone ? (
           <ProgressTracker
+            query={data.query}
             status={data.status}
-            sourcesCount={data.sources.length}
+            sources={data.sources}
             expectedSources={data.expectedSources}
           />
         ) : null}
 
         {isDone && data.verdictJson ? (
-          <ReportCard query={data.query} verdictJson={data.verdictJson} />
+          <ReportCard
+            query={data.query}
+            verdictJson={data.verdictJson}
+            sourceCount={data.sources.length}
+            createdAt={data.createdAt}
+            updatedAt={data.updatedAt}
+          />
         ) : null}
 
-        {data.sources.length > 0 ? (
-          <SourceList sources={data.sources} />
-        ) : null}
+        {data.sources.length > 0 ? <SourceList sources={data.sources} /> : null}
       </main>
+
+      <AppFooter />
     </div>
   );
 }

@@ -2,17 +2,31 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
+const CARD_SURFACE = {
+  // Raised: the default clay pillow — most cards, panels, source rows.
+  raised: "bg-card shadow-[var(--shadow-raised)]",
+  // Well: carved into the surface — inputs, stat tiles, log panels.
+  well: "bg-well shadow-[var(--shadow-well)]",
+  // Ink: the dark slab reserved for verdicts only, per DESIGN.md.
+  ink: "bg-[linear-gradient(150deg,var(--ink-light),var(--ink))] text-ink-foreground shadow-[var(--shadow-ink)]",
+} as const
+
 function Card({
   className,
   size = "default",
+  surface = "raised",
   ...props
-}: React.ComponentProps<"div"> & { size?: "default" | "sm" }) {
+}: React.ComponentProps<"div"> & {
+  size?: "default" | "sm"
+  surface?: keyof typeof CARD_SURFACE
+}) {
   return (
     <div
       data-slot="card"
       data-size={size}
       className={cn(
-        "group/card flex flex-col gap-(--card-spacing) overflow-hidden rounded-xl bg-card py-(--card-spacing) text-sm text-card-foreground ring-1 ring-foreground/10 [--card-spacing:--spacing(4)] has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(3)] data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl",
+        "group/card flex flex-col gap-(--card-spacing) overflow-hidden rounded-3xl py-(--card-spacing) text-sm text-card-foreground [--card-spacing:--spacing(6)] has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(4)] data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-3xl *:[img:last-child]:rounded-b-3xl",
+        CARD_SURFACE[surface],
         className
       )}
       {...props}

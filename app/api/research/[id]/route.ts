@@ -60,6 +60,8 @@ export async function GET(
     status: session.status,
     expectedSources: session.expectedSources,
     verdictJson: session.verdictJson,
+    createdAt: session.createdAt.toISOString(),
+    updatedAt: session.updatedAt.toISOString(),
     sources,
     findings,
   });

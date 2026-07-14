@@ -32,6 +32,26 @@ enum Sentiment {
   neutral
 }
 
+enum Plan {
+  free
+  pro
+}
+
+// One row per Supabase Auth user who has ever started a Stripe checkout. Absence of a row
+// means "free, never subscribed" — see lib/billing.ts for the default-free lookup helper.
+// SITE-REDESIGN-PLAN.md §Stage C: billing + quota only, no deep-dive/export/price-watch/queue.
+model Subscription {
+  id                   String   @id @default(cuid())
+  userId               String   @unique // Supabase Auth user id (auth.uid())
+  plan                 Plan     @default(free)
+  stripeCustomerId     String   @unique
+  stripeSubscriptionId String?
+  status               String? // Stripe subscription status: active|past_due|canceled|...
+  currentPeriodEnd     DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
 model ResearchSession {
   id              String   @id @default(cuid())
   userId          String                        // Supabase Auth user id (auth.uid()) — see §4a

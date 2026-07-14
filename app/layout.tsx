@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Source_Serif_4, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
+import { SiteHeader } from "@/components/site-header";
 
 // Serif + mono type pairing per DESIGN.md: serif carries body/display copy,
 // mono carries accents (buttons, labels, metadata).
@@ -32,7 +33,10 @@ export default function RootLayout({
       className={`${sourceSerif.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <Providers>{children}</Providers>
+        <Providers>
+          <SiteHeader />
+          <div className="flex flex-1 flex-col">{children}</div>
+        </Providers>
       </body>
     </html>
   );

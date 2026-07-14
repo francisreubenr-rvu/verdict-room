@@ -5,20 +5,27 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const badgeVariants = cva(
-  "group/badge inline-flex h-5 w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-4xl border border-transparent px-2 py-0.5 text-xs font-medium whitespace-nowrap transition-all focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&>svg]:pointer-events-none [&>svg]:size-3!",
+  "group/badge inline-flex h-6 w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-xl border border-transparent px-2.5 py-0.5 font-mono text-[11px] font-semibold tracking-wide whitespace-nowrap transition-all focus-visible:ring-[3px] focus-visible:ring-ring/50 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 [&>svg]:pointer-events-none [&>svg]:size-3!",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground [a]:hover:bg-primary/80",
-        secondary:
-          "bg-secondary text-secondary-foreground [a]:hover:bg-secondary/80",
+        default:
+          "bg-[linear-gradient(145deg,var(--primary-light),var(--primary))] text-primary-foreground shadow-[inset_1px_2px_4px_rgba(255,225,200,0.5),inset_-2px_-3px_5px_rgba(90,35,10,0.35)] [a]:hover:opacity-90",
+        secondary: "bg-chip text-secondary-foreground shadow-[var(--shadow-chip)]",
         destructive:
-          "bg-destructive/10 text-destructive focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:focus-visible:ring-destructive/40 [a]:hover:bg-destructive/20",
-        outline:
-          "border-border text-foreground [a]:hover:bg-muted [a]:hover:text-muted-foreground",
-        ghost:
-          "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
-        link: "text-primary underline-offset-4 hover:underline",
+          "bg-[linear-gradient(145deg,var(--destructive-light),var(--destructive))] text-primary-foreground",
+        outline: "border-dashed border-muted-foreground/40 bg-transparent text-muted-foreground",
+        ghost: "bg-transparent text-muted-foreground hover:bg-muted",
+        link: "rounded-none text-primary underline-offset-4 hover:underline",
+        // Sponsorship classification — see DESIGN.md "Sponsorship badges".
+        organic:
+          "bg-[#e9dcb4] text-[#5a4a22] shadow-[inset_1px_2px_4px_rgba(255,250,230,0.9),inset_-1px_-1px_3px_rgba(107,93,69,0.2)]",
+        sponsored:
+          "bg-[linear-gradient(145deg,var(--primary-light),var(--primary))] text-primary-foreground shadow-[inset_1px_2px_4px_rgba(255,225,200,0.5),inset_-2px_-3px_5px_rgba(90,35,10,0.35)]",
+        affiliate:
+          "bg-[linear-gradient(145deg,var(--accent-light),var(--accent))] text-accent-foreground shadow-[inset_1px_2px_4px_rgba(255,245,215,0.7),inset_-2px_-3px_5px_rgba(138,90,43,0.3)]",
+        unclassified:
+          "border-dashed border-muted-foreground/50 bg-[#f2ead2] text-muted-foreground",
       },
     },
     defaultVariants: {

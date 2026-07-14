@@ -40,6 +40,10 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-well: var(--well);
+  --color-chip: var(--chip);
+  --color-ink: var(--ink);
+  --color-ink-foreground: var(--ink-foreground);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -49,41 +53,63 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* Warm paperback palette — see DESIGN.md for the full token rationale. */
+/* Warm Clay palette — see DESIGN.md for the full token rationale. */
 :root {
-  --background: #f4eee0;
+  --background: #f2e8d5;
   --foreground: #2b2116;
-  --card: #fbf7ec;
+  --card: #f8f0dd;
   --card-foreground: #2b2116;
-  --popover: #fbf7ec;
+  --popover: #f8f0dd;
   --popover-foreground: #2b2116;
-  --primary: #b14a2b;
-  --primary-foreground: #fbf7ec;
-  --secondary: #e4d9be;
+  --primary: #a84a28;
+  --primary-light: #c96a45;
+  --primary-foreground: #fff6e8;
+  --secondary: #f4ecd8;
   --secondary-foreground: #2b2116;
-  --muted: #eae1cb;
+  --muted: #efe3c8;
   --muted-foreground: #6b5d45;
-  --accent: #d8cba0;
-  --accent-foreground: #2b2116;
-  --destructive: #a23325;
+  --accent: #c9a558;
+  --accent-light: #e2c98f;
+  --accent-foreground: #5a4322;
+  --destructive: #8f3325;
+  --destructive-light: #b5533f;
   --border: #c7b896;
   --input: #c7b896;
-  --ring: #b14a2b;
-  --chart-1: #b14a2b;
+  --ring: #a84a28;
+  --well: #efe3c8;
+  --chip: #f4ecd8;
+  --ink: #2b2116;
+  --ink-light: #3a2d1d;
+  --ink-foreground: #f4eee0;
+  --chart-1: #a84a28;
   --chart-2: #6b5d45;
   --chart-3: #8a7a52;
-  --chart-4: #d8cba0;
+  --chart-4: #c9a558;
   --chart-5: #2b2116;
-  --radius: 0.375rem;
-  --sidebar: #eae1cb;
+  --radius: 0.9rem;
+  --sidebar: #efe3c8;
   --sidebar-foreground: #2b2116;
-  --sidebar-primary: #b14a2b;
-  --sidebar-primary-foreground: #fbf7ec;
-  --sidebar-accent: #d8cba0;
+  --sidebar-primary: #a84a28;
+  --sidebar-primary-foreground: #fff6e8;
+  --sidebar-accent: #c9a558;
   --sidebar-accent-foreground: #2b2116;
   --sidebar-border: #c7b896;
-  --sidebar-ring: #b14a2b;
+  --sidebar-ring: #a84a28;
   --grid-line: color-mix(in oklch, var(--foreground), transparent 92%);
+
+  /* Clay shadow recipes — layered inset (highlight/groove) + outset (lift). See DESIGN.md "Shadows". */
+  --shadow-raised: 10px 14px 28px rgba(43, 33, 22, 0.12), inset 2px 3px 6px rgba(255, 252, 242, 0.95), inset -3px -4px 8px rgba(107, 93, 69, 0.14);
+  --shadow-raised-lg: 14px 18px 38px rgba(43, 33, 22, 0.15), inset 2px 3px 7px rgba(255, 252, 242, 0.95), inset -4px -5px 10px rgba(107, 93, 69, 0.15);
+  --shadow-raised-hover: 12px 16px 30px rgba(43, 33, 22, 0.15), inset 2px 3px 6px rgba(255, 252, 242, 0.95), inset -3px -4px 8px rgba(107, 93, 69, 0.14);
+  --shadow-well: inset 3px 4px 8px rgba(107, 93, 69, 0.18), inset -2px -3px 6px rgba(255, 250, 238, 0.9);
+  --shadow-well-lg: inset 4px 6px 12px rgba(107, 93, 69, 0.22), inset -3px -4px 10px rgba(255, 250, 238, 0.9);
+  --shadow-chip: 4px 6px 12px rgba(43, 33, 22, 0.1), inset 1px 2px 4px rgba(255, 252, 242, 0.9), inset -2px -2px 5px rgba(107, 93, 69, 0.12);
+  --shadow-btn-primary: inset 2px 3px 6px rgba(255, 225, 200, 0.55), inset -3px -5px 9px rgba(90, 35, 10, 0.4), 8px 12px 22px rgba(43, 33, 22, 0.22);
+  --shadow-btn-primary-active: inset 3px 4px 8px rgba(90, 35, 10, 0.45), inset -2px -3px 6px rgba(255, 225, 200, 0.4), 3px 5px 10px rgba(43, 33, 22, 0.2);
+  --shadow-btn-secondary: inset 2px 3px 6px rgba(255, 252, 242, 0.95), inset -3px -4px 8px rgba(107, 93, 69, 0.16), 7px 10px 18px rgba(43, 33, 22, 0.12);
+  --shadow-btn-secondary-active: inset 3px 4px 8px rgba(107, 93, 69, 0.2), 2px 3px 8px rgba(43, 33, 22, 0.12);
+  --shadow-ink: 14px 18px 36px rgba(43, 33, 22, 0.3), inset 1px 2px 3px rgba(120, 95, 60, 0.5);
+  --shadow-nav: 10px 14px 30px rgba(43, 33, 22, 0.14), inset 2px 3px 6px rgba(255, 252, 242, 0.95), inset -3px -4px 8px rgba(107, 93, 69, 0.14);
 }
 
 .dark {
@@ -94,21 +120,29 @@
   --popover: #241d14;
   --popover-foreground: #f0e6d2;
   --primary: #d97052;
+  --primary-light: #e08a6f;
   --primary-foreground: #1e1810;
   --secondary: #362c1d;
   --secondary-foreground: #f0e6d2;
   --muted: #2e2517;
   --muted-foreground: #b3a487;
-  --accent: #3c3020;
-  --accent-foreground: #f0e6d2;
+  --accent: #c9a558;
+  --accent-light: #dcbd7c;
+  --accent-foreground: #1e1810;
   --destructive: #d97052;
+  --destructive-light: #e08a6f;
   --border: #443725;
   --input: #443725;
   --ring: #d97052;
+  --well: #171209;
+  --chip: #2e2517;
+  --ink: #f0e6d2;
+  --ink-light: #f7efdd;
+  --ink-foreground: #1e1810;
   --chart-1: #d97052;
   --chart-2: #b3a487;
   --chart-3: #a89664;
-  --chart-4: #3c3020;
+  --chart-4: #c9a558;
   --chart-5: #f0e6d2;
   --sidebar: #241d14;
   --sidebar-foreground: #f0e6d2;
@@ -119,6 +153,19 @@
   --sidebar-border: #443725;
   --sidebar-ring: #d97052;
   --grid-line: color-mix(in oklch, var(--foreground), transparent 94%);
+
+  --shadow-raised: 10px 14px 28px rgba(0, 0, 0, 0.4), inset 1px 1px 2px rgba(255, 255, 255, 0.04);
+  --shadow-raised-lg: 14px 18px 38px rgba(0, 0, 0, 0.45), inset 1px 1px 2px rgba(255, 255, 255, 0.05);
+  --shadow-raised-hover: 12px 16px 30px rgba(0, 0, 0, 0.45), inset 1px 1px 2px rgba(255, 255, 255, 0.05);
+  --shadow-well: inset 3px 4px 8px rgba(0, 0, 0, 0.5), inset -1px -1px 2px rgba(255, 255, 255, 0.03);
+  --shadow-well-lg: inset 4px 6px 12px rgba(0, 0, 0, 0.55), inset -1px -1px 2px rgba(255, 255, 255, 0.03);
+  --shadow-chip: 4px 6px 12px rgba(0, 0, 0, 0.35), inset 1px 1px 2px rgba(255, 255, 255, 0.04);
+  --shadow-btn-primary: inset 1px 2px 3px rgba(255, 210, 190, 0.25), 8px 12px 22px rgba(0, 0, 0, 0.4);
+  --shadow-btn-primary-active: inset 3px 4px 8px rgba(0, 0, 0, 0.35), 3px 5px 10px rgba(0, 0, 0, 0.35);
+  --shadow-btn-secondary: inset 1px 1px 2px rgba(255, 255, 255, 0.05), 7px 10px 18px rgba(0, 0, 0, 0.35);
+  --shadow-btn-secondary-active: inset 3px 4px 8px rgba(0, 0, 0, 0.4), 2px 3px 8px rgba(0, 0, 0, 0.3);
+  --shadow-ink: 14px 18px 36px rgba(0, 0, 0, 0.5), inset 1px 2px 3px rgba(255, 255, 255, 0.06);
+  --shadow-nav: 10px 14px 30px rgba(0, 0, 0, 0.4), inset 1px 1px 2px rgba(255, 255, 255, 0.04);
 }
 
 @layer base {
@@ -135,5 +182,16 @@
   }
   html {
     @apply font-sans;
+  }
+}
+
+/* Gentle idle bob for the hero demo illustration — see components/hero-demo.tsx. */
+@keyframes ppBob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-7px);
   }
 }

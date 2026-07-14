@@ -63,6 +63,8 @@ export interface ResearchSessionResponse {
   status: string;
   expectedSources: number;
   verdictJson: VerdictJson | null;
+  createdAt: string;
+  updatedAt: string;
   sources: ResearchSource[];
   findings: ResearchFinding[];
 }

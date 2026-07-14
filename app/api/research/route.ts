@@ -4,12 +4,19 @@ import { prisma } from "@/lib/db";
 import { createClient } from "@/lib/supabase/server";
 import { generateSearchQueries } from "@/lib/llm";
 import { googleCustomSearch, GoogleSearchError } from "@/lib/research/search";
+import {
+  FREE_MONTHLY_REPORT_LIMIT,
+  countReportsThisMonth,
+  findRecentDuplicateSession,
+  getPlanForUser,
+} from "@/lib/billing";
 
 // GET /api/research — PLAN.md §6 M5: the current user's research sessions, most recent first,
-// for the landing page's "Recent research" list. Scoped to auth.uid() (RLS is the real
-// enforcement once a live Supabase project exists — see the [id] route's same defense-in-depth
-// note), hard 401 for unauthenticated callers since this is a listing of private history, not a
-// single session lookup.
+// for the landing page's "Recent research" list, plus real usage (SITE-REDESIGN-PLAN.md §Stage C)
+// so /app can render "X of 3 free reports left" without fabricating a number. Scoped to auth.uid()
+// (RLS is the real enforcement once a live Supabase project exists — see the [id] route's same
+// defense-in-depth note), hard 401 for unauthenticated callers since this is a listing of private
+// history, not a single session lookup.
 export async function GET() {
   const supabase = await createClient();
   const {
@@ -20,12 +27,16 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const sessions = await prisma.researchSession.findMany({
-    where: { userId: user.id },
-    orderBy: { createdAt: "desc" },
-    take: 20,
-    select: { id: true, query: true, status: true, createdAt: true },
-  });
+  const [sessions, plan, used] = await Promise.all([
+    prisma.researchSession.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      select: { id: true, query: true, status: true, createdAt: true },
+    }),
+    getPlanForUser(user.id),
+    countReportsThisMonth(user.id),
+  ]);
 
   return NextResponse.json({
     sessions: sessions.map((session) => ({
@@ -34,6 +45,11 @@ export async function GET() {
       status: session.status,
       createdAt: session.createdAt.toISOString(),
     })),
+    usage: {
+      plan,
+      used,
+      limit: plan === "pro" ? null : FREE_MONTHLY_REPORT_LIMIT,
+    },
   });
 }
 
@@ -54,6 +70,26 @@ export async function POST(request: Request) {
 
   if (!query) {
     return NextResponse.json({ error: "query is required" }, { status: 400 });
+  }
+
+  const plan = await getPlanForUser(user.id);
+  if (plan === "free") {
+    // Pricing FAQ promise: re-running the same query within 24h is free — return the
+    // existing session instead of creating a new one or consuming quota.
+    const duplicate = await findRecentDuplicateSession(user.id, query);
+    if (duplicate) {
+      return NextResponse.json({ id: duplicate.id }, { status: 200 });
+    }
+
+    const used = await countReportsThisMonth(user.id);
+    if (used >= FREE_MONTHLY_REPORT_LIMIT) {
+      return NextResponse.json(
+        {
+          error: `You've used all ${FREE_MONTHLY_REPORT_LIMIT} free reports this month. Upgrade to Pro for unlimited reports.`,
+        },
+        { status: 402 }
+      );
+    }
   }
 
   const { queries, parsed } = await generateSearchQueries(query);

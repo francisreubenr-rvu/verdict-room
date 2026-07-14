@@ -1,29 +1,33 @@
 # DESIGN.md — PurchasePilot
 
-Design language: warm paperback surface, subtle grid, serif + mono type pairing, retro/tactile
-buttons. Tokens below are wired as real Tailwind CSS variables in `app/globals.css` (`:root` /
-`.dark`), not aspirational — read that file for the source of truth if these drift.
+Design language: **Warm Clay** — claymorphic pillows on a warm paper surface, serif + mono type
+pairing kept from the original system. Supersedes the earlier flat neobrutalist system (2px ink
+borders, hard offset shadows) per the "Purchase Pilot Website Design" Claude Design project
+(`SITE-REDESIGN-PLAN.md` tracks the implementation). Tokens below are wired as real Tailwind CSS
+variables in `app/globals.css` (`:root` / `.dark`), not aspirational — read that file for the
+source of truth if these drift.
 
 ## Color tokens (light — default)
 
 | Token | Value | Usage |
 |---|---|---|
-| `--background` | `#f4eee0` | Page surface — warm paper cream |
-| `--foreground` | `#2b2116` | Body text — dark ink brown |
-| `--card` | `#fbf7ec` | Card/panel surface — lighter than page bg |
-| `--primary` | `#b14a2b` | Terracotta/rust — primary buttons, links, focus |
-| `--primary-foreground` | `#fbf7ec` | Text on primary |
-| `--secondary` | `#e4d9be` | Warm tan — secondary buttons |
-| `--muted` | `#eae1cb` | Muted panels, disabled states |
+| `--background` | `#f2e8d5` | Page surface — warm paper |
+| `--foreground` / `--ink` | `#2b2116` | Body text — dark ink brown |
+| `--card` | `#f8f0dd` | Raised card/panel surface |
+| `--well` / `--muted` | `#efe3c8` | Carved-in surfaces — inputs, stat tiles, progress tracks |
+| `--chip` / `--secondary` | `#f4ecd8` | Chips, secondary buttons |
+| `--primary` / `--primary-light` | `#a84a28` / `#c96a45` | Terracotta gradient — primary buttons, sponsored badges, links |
+| `--primary-foreground` | `#fff6e8` | Text on primary/ink surfaces |
+| `--accent` / `--accent-light` | `#c9a558` / `#e2c98f` | Ochre gradient — affiliate badges, "Pro"/highlight chips |
+| `--destructive` / `--destructive-light` | `#8f3325` / `#b5533f` | Rust gradient — errors, destructive actions |
 | `--muted-foreground` | `#6b5d45` | Secondary text |
-| `--accent` | `#d8cba0` | Highlight/accent fills |
-| `--destructive` | `#a23325` | Errors |
-| `--border` / `--input` | `#c7b896` | Dividers, input borders |
-| `--ring` | `#b14a2b` | Focus ring |
+| `--border` / `--input` | `#c7b896` | Rarely visible — claymorphism reads via shadow, not border |
+| `--ink-light` | `#3a2d1d` | Ink slab gradient (verdict panels) — pairs with `--ink`/`--ink-foreground` |
+| `--ring` | `#a84a28` | Focus ring |
 
-Dark mode exists (`.dark` class) with the same warm family shifted dark (`#1e1810` background,
-`#f0e6d2` foreground, `#d97052` primary) but is **not** the default route per house design rules —
-light is what ships unless the OS/user explicitly opts into dark.
+Dark mode exists (`.dark` class), proportionally remapped (dark surfaces, same shadow *structure*
+with black-based shadows instead of warm-brown ones) but is **not** the default route per house
+design rules — light is what ships unless the OS/user explicitly opts into dark.
 
 ## Typography
 
@@ -32,47 +36,82 @@ light is what ships unless the OS/user explicitly opts into dark.
 | Body / headings / display | Source Serif 4 | `font-sans` (aliased), `font-serif` |
 | Accents — buttons, labels, metadata, code-like bits | Geist Mono | `font-mono` |
 
-Loaded via `next/font/google` in `app/layout.tsx` (`sourceSerif`, `geistMono`), exposed as CSS
-variables (`--font-source-serif`, `--font-geist-mono`) and mapped into the Tailwind `@theme` block
-in `app/globals.css`. The serif carries the product's editorial voice (it's a research report,
-not a dashboard); mono marks anything mechanical or actionable.
+Unchanged from the prior system. Loaded via `next/font/google` in `app/layout.tsx` (`sourceSerif`,
+`geistMono`), exposed as CSS variables and mapped into the Tailwind `@theme` block.
 
 ## Surface — subtle grid
 
-`body` in `app/globals.css` paints a 32px grid using `--grid-line`, a low-alpha mix of
-`--foreground` into `--background` (`color-mix(in oklch, var(--foreground), transparent 92%)`).
-Reads as paper graph-ruling, not a design-tool artifact — deliberately faint.
+`body` still paints the 32px paper grid via `--grid-line`. Unchanged.
 
-## Buttons — retro/tactile
+## Shadows — the core of claymorphism
 
-`components/ui/button.tsx` variants (`default`, `outline`, `secondary`) share:
-- `border-2 border-foreground` — visible ink-colored border, not a flat modern button.
-- `shadow-[3px_3px_0_0_var(--color-foreground)]` — hard offset shadow, no blur (screen-printed /
-  stamped look).
-- Hover lifts the shadow to `4px 4px` with a slight `-translate-y-0.5`.
-- Active/press collapses the offset to `0` and translates the button `3px, 3px` into the shadow's
-  former position — a physical "pressed button" motion.
-- `rounded-md` (small radius, not the default `rounded-lg`) and `font-mono` — mechanical, not soft.
+Every clay surface is a **layered box-shadow recipe**, not a border. Recipes live as CSS custom
+properties in `app/globals.css` and get referenced via Tailwind arbitrary values
+(`shadow-[var(--shadow-raised)]`) rather than repeating literal rgba strings at every call site:
 
-`ghost` and `link` variants stay borderless/shadowless by design — they're meant to read as quiet,
-not tactile.
-
-## Radius
-
-`--radius: 0.375rem` (down from shadcn's default `0.625rem`) — smaller corners read more retro/
-stamped than the rounded-corner default.
-
-## Spacing / layout
-
-M5 revisit, decided: the results dashboard uses two densities, not one uniform scale.
-
-| Area | Spacing | Why |
+| Token | Reads as | Used by |
 |---|---|---|
-| `SourceCard` (`source-list.tsx`) | `Card size="sm"` (`--card-spacing: 0.75rem`/12px, vs. the 1rem/16px default) | Each card packs platform, author, sponsorship badge, summary, and URL — the default padding read as too loose for that much metadata per row. |
-| Cards within one source-list section | `gap-3` (12px) | Tight, scannable — same-group items. |
-| Between source-list sections (organic / sponsored / unclassified) | `gap-8` (32px) | Deliberately looser than within-section — keeps the sponsored-vs-organic split, the product's core differentiator, visually distinct rather than blurring into one long list. |
-| Verdict ranked-option cards (`verdict.tsx`) | Default `p-4` card padding, `gap-4` between options | Fewer, denser blocks (name/score/pros/cons) than the source list — the looser default reads better here than the source-list's tight scale would. |
-| Verdict pros/cons grid | `gap-3` between columns (`sm:grid-cols-2`, single column below `sm`) | Matches the source-list's tight scale since it's the same kind of short scannable list. |
+| `--shadow-raised` / `--shadow-raised-lg` | Pillow lifted off the page (outset shadow + inset highlight/groove) | `Card` (`surface="raised"`, the default) |
+| `--shadow-well` / `--shadow-well-lg` | Carved into the page (inset only, no outset) | `Card` (`surface="well"`), inputs' wrapper containers, progress tracks |
+| `--shadow-chip` | Small raised pill | suggestion chips, filter pills |
+| `--shadow-btn-primary` / `-active` | Gradient button raised / pressed | `Button` `default`/`destructive` variants |
+| `--shadow-btn-secondary` / `-active` | Flat chip button raised / pressed | `Button` `outline`/`secondary` variants |
+| `--shadow-ink` | Dark slab lift | `Card` (`surface="ink"`) — verdict panels only |
+| `--shadow-nav` | Floating pill nav lift | `SiteHeader` |
 
-No new Tailwind spacing tokens were added — `gap-3`/`gap-4`/`gap-8` and the existing `size="sm"`
-card variant already cover the dashboard's density needs.
+## Buttons — clay, not brutalist
+
+`components/ui/button.tsx` variants:
+- `default` / `destructive` — gradient fill (`--primary-light`→`--primary` or
+  `--destructive-light`→`--destructive`), `shadow-btn-primary`. Hover settles `translate-y-px`;
+  active sinks `translate-y-[3px] scale-[0.97]` and swaps to the `-active` shadow (inset only —
+  the button looks pressed into the clay).
+- `outline` / `secondary` — flat chip fill (`--chip`), `shadow-btn-secondary`, same press motion at
+  a smaller sink (`translate-y-[2px]`).
+- `ghost` — "quiet/locked": dashed 2px border, no shadow, no fill. Deliberately underplayed —
+  matches the design's "Secondary/quiet" button which never competes with a primary action.
+- `link` — borderless, unchanged from the prior system.
+
+Radius is `rounded-2xl` (buttons), `rounded-3xl` (cards) — soft and pillowy, not the old `rounded-md`
+stamped look. Global `--radius: 0.9rem` (up from `0.375rem`).
+
+## Badges — sponsorship classification gets first-class variants
+
+`components/ui/badge.tsx` adds `organic` / `sponsored` / `affiliate` / `unclassified` variants
+(alongside the generic shadcn set) so `source-list.tsx` and `verdict.tsx` render sponsorship pills
+without ad-hoc classNames:
+- `organic` — flat `#e9dcb4` chip, dark-ochre text.
+- `sponsored` — terracotta gradient, same as primary buttons (money = the primary-attention color).
+- `affiliate` — ochre gradient, distinct from sponsored so the two paid categories don't blur.
+- `unclassified` — dashed border, no fill — visually "we're not claiming to know."
+
+## Inputs — carved, not drawn
+
+`components/ui/input.tsx` is borderless/transparent by default (`border-transparent bg-transparent`,
+no default focus ring) — it's meant to sit inside a **well** container
+(`bg-well shadow-[var(--shadow-well-lg)]`) that the consuming page provides, exactly like the
+query composer on `/app` and the landing hero demo. Never draw an input's own border or shadow at
+the primitive level; the well wrapper is the visual language.
+
+## Motion
+
+- **Press = sink.** Everything clickable presses 3px (buttons) or 2px (chips/inputs) into the
+  clay on `:active`. Nothing glows.
+- **Reveal = rise, once.** `components/reveal.tsx` fades+rises sections 30px as they scroll into
+  view, then stays — an IntersectionObserver wrapper that starts visible and only hides once IO is
+  confirmed alive (never traps content invisible if IO silently fails), respects
+  `prefers-reduced-motion`.
+- **Pipeline = pulse.** Only the active pipeline stage breathes (`animate-pulse`-style); done
+  stages sit still.
+
+## Layout — persistent nav, two footer variants
+
+`SiteHeader` (floating pill, sticky top) renders on every route — marketing and app alike — per
+the design. Footer varies by route group: `MarketingFooter` (full 4-column, `components/footer.tsx`)
+on marketing pages, `AppFooter` (compact one-liner) on `/app`, `/research/[id]`, `/login`.
+
+## Spacing / layout — source list and verdict density
+
+Carried over from the M5 revisit, unchanged by this redesign: `SourceCard` uses `Card size="sm"`
+(tighter `--card-spacing`), `gap-3` within a source-list section, `gap-8` between sections
+(organic/sponsored/unclassified), verdict option cards use the default `gap-4`/`p-4` density.
