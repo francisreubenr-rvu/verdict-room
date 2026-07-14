@@ -1,23 +1,34 @@
-// The Verdict Room — DeepSeek wrapper (search-query generation, extract+classify, synthesis).
+// The Verdict Room — Groq wrapper (search-query generation, extract+classify, synthesis).
 // Pure pipeline logic: no Prisma/DB calls in this file. Per PLAN.md §3, all three calls use one
 // model and structured output (forced function-calling) so downstream shapes are reliable.
 //
-// Changed 2026-07-15 from the original Claude Sonnet wrapper: DeepSeek's API is OpenAI-compatible
-// (official DeepSeek docs recommend the `openai` SDK pointed at their base URL), so this uses
-// OpenAI-style tool/function-calling instead of Anthropic's tool_use block format. Functionally
-// equivalent forced-tool-call pattern, different response shape (arguments come back as a JSON
-// string, not a pre-parsed object — parsed explicitly below).
+// Changed 2026-07-15 twice: Claude Sonnet -> DeepSeek -> Groq (free-tier API keys), all same-day,
+// all user preference rather than an architectural driver. Groq's API is OpenAI-compatible too,
+// so this is still OpenAI-style tool/function-calling — only the base URL, API key, and model
+// name changed from the DeepSeek version.
 
 import OpenAI from "openai";
 
-const deepseek = new OpenAI({
-  apiKey: process.env.DEEPSEEK_API_KEY,
-  baseURL: "https://api.deepseek.com",
-});
+// Lazy singleton — constructing eagerly at module load crashes Next.js's build-time page-data
+// collection (which imports every route module) when GROQ_API_KEY isn't set yet, e.g. no
+// .env.local. Matches lib/stripe.ts's getStripe() pattern.
+let client: OpenAI | undefined;
 
-// deepseek-chat (DeepSeek-V3) — deepseek-reasoner (R1) doesn't reliably support forced
-// function-calling, which every call in this file depends on for a guaranteed-shape response.
-const MODEL = "deepseek-chat";
+function getGroq(): OpenAI {
+  if (!client) {
+    client = new OpenAI({
+      apiKey: process.env.GROQ_API_KEY,
+      baseURL: "https://api.groq.com/openai/v1",
+    });
+  }
+  return client;
+}
+
+// openai/gpt-oss-120b — Groq's own recommended replacement for the now-deprecated
+// llama-3.3-70b-versatile, with native tool-use/function-calling support. Free tier is rate-limited
+// (30 req/min, 1K req/day, 8K tokens/min, 200K tokens/day as of this writing) — worth knowing if
+// extract+classify calls (one per source, up to 12/session) start getting throttled.
+const MODEL = "openai/gpt-oss-120b";
 
 export type ParsedQuery = {
   product: string;
@@ -84,7 +95,7 @@ export async function generateSearchQueries(
 ): Promise<{ queries: string[]; parsed: ParsedQuery }> {
   const toolName = "emit_search_plan";
 
-  const response = await deepseek.chat.completions.create({
+  const response = await getGroq().chat.completions.create({
     model: MODEL,
     max_tokens: 1024,
     tools: [
@@ -167,7 +178,7 @@ export async function extractAndClassify(input: {
 }> {
   const toolName = "emit_extraction";
 
-  const response = await deepseek.chat.completions.create({
+  const response = await getGroq().chat.completions.create({
     model: MODEL,
     max_tokens: 4096,
     tools: [
@@ -287,7 +298,7 @@ export async function synthesize(input: {
   const organicFindings = input.findings.filter((f) => f.sponsorship === "organic");
   const nonOrganicFindings = input.findings.filter((f) => f.sponsorship !== "organic");
 
-  const response = await deepseek.chat.completions.create({
+  const response = await getGroq().chat.completions.create({
     model: MODEL,
     max_tokens: 4096,
     tools: [

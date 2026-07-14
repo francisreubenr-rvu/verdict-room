@@ -71,17 +71,20 @@ fine at this project's request volume. Revisit if Reddit starts throttling/block
 
 ---
 
-## e. DeepSeek API key
+## e. Groq API key
 
-**Changed 2026-07-15** from the original Anthropic/Claude choice — see PLAN.md §8.
+**Changed 2026-07-15 twice** — Claude/Anthropic -> DeepSeek -> Groq, same day, for free-tier API
+access. See PLAN.md §8.
 
-1. https://platform.deepseek.com/api_keys → **Create new API key**.
-2. Copy it → `DEEPSEEK_API_KEY`. Make sure the account has billing/credits attached — the
-   research pipeline makes real DeepSeek calls (search-query generation, per-source
-   extract+classify, synthesis; ~13 calls/session per PLAN.md §3). DeepSeek's per-token pricing is
-   published at https://platform.deepseek.com/api-docs/pricing — not re-measured against this
-   pipeline's actual token usage yet, so budget for a session or two of real usage before trusting
-   any specific per-session cost figure.
+1. https://console.groq.com/ → sign up/log in → **API Keys** (left sidebar) → **Create API Key**.
+2. Copy it → `GROQ_API_KEY`.
+3. Model used is `openai/gpt-oss-120b` (Groq's own recommended replacement for the deprecated
+   `llama-3.3-70b-versatile`, chosen for native tool-use support). Free-tier limits as of
+   2026-07-15: 30 requests/min, 1,000 requests/day, 8,000 tokens/min, 200,000 tokens/day. The
+   research pipeline makes ~13 calls/session (search-query generation, up to 12 extract+classify,
+   1 synthesis per PLAN.md §3) — the 1K/day request cap is the one most likely to bite first at
+   real usage; the 8K tokens/min cap is worth watching too since extract+classify sends full
+   source content per call.
 
 ---
 
@@ -185,7 +188,7 @@ To test a subscription end-to-end without a real card: Stripe test mode accepts 
 4. **Project Settings → Environment Variables** — add every key from `.env.local.example`, with the
    real values from steps a/c/e (same values as your local `.env.local`, not the Google OAuth
    Client ID/Secret — those stay Supabase-dashboard-only; no Reddit vars exist per step d):
-   - `DEEPSEEK_API_KEY`
+   - `GROQ_API_KEY`
    - `GOOGLE_CUSTOM_SEARCH_API_KEY`
    - `GOOGLE_CUSTOM_SEARCH_CX`
    - `DATABASE_URL`

@@ -17,9 +17,9 @@ looks wrong, flag it rather than silently diverging.
 
 Next.js 16 (App Router) · TypeScript · Bun · Tailwind CSS 4 · shadcn/ui · Zustand · TanStack Query
 · Prisma (Postgres, targeting Supabase) · Supabase Auth (Google Sign-In only) · `@vercel/functions`
-(`waitUntil` for the chained research pipeline) · DeepSeek (`openai` SDK pointed at DeepSeek's
-OpenAI-compatible endpoint, from M2 — see PLAN.md §8 for why this replaced the original Claude
-choice) · Google Custom Search API (from M2).
+(`waitUntil` for the chained research pipeline) · Groq (`openai` SDK pointed at Groq's
+OpenAI-compatible endpoint, `openai/gpt-oss-120b`, from M2 — see PLAN.md §8 for why this replaced
+Claude then DeepSeek) · Google Custom Search API (from M2).
 
 Prisma is pinned to **v6** (`prisma`/`@prisma/client` `^6`), not the current v7. Prisma 7 removed
 `url`/`directUrl` from the `datasource` block in favor of a `prisma.config.ts` + driver-adapter
