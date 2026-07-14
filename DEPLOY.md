@@ -19,8 +19,15 @@ top of the `trustedDependencies` bun already has for `prisma`/`@prisma/client`/`
 1. Go to https://supabase.com/dashboard → **New project**. Name it (e.g. `the-verdict-room`), set a
    database password (save it — you'll need it in the connection strings below), pick a region.
 2. Once provisioned: **Project Settings → Database → Connection string**.
-3. Copy the **pooled** connection string (port `6543`, `?pgbouncer=true`) → this is `DATABASE_URL`.
-4. Copy the **direct** connection string (port `5432`) → this is `DIRECT_URL`.
+3. Copy the **pooled** connection string (dropdown/tab labeled "Transaction pooler", port `6543`)
+   → this is `DATABASE_URL`. Append `?pgbouncer=true` if it isn't already there — Prisma needs
+   that flag to disable prepared statements over the pooler connection.
+4. Copy the **direct** connection string (dropdown/tab labeled "Direct connection", port `5432`)
+   → this is `DIRECT_URL`. **These two use different hostname formats — don't reuse one for the
+   other.** Direct connections look like `db.<project-ref>.supabase.co`; pooled connections look
+   like `aws-<n>-<region>.pooler.supabase.com` with the project ref folded into the *username*
+   (`postgres.<project-ref>`) instead of the host. Copy each from its own tab rather than editing
+   one string to make the other.
 5. Substitute your real database password into both (replace `[YOUR-PASSWORD]`).
 6. **Project Settings → API** → copy the **Project URL** → `NEXT_PUBLIC_SUPABASE_URL`, and the
    **anon/public key** → `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
@@ -97,7 +104,18 @@ cp .env.local.example .env.local
 
 Fill in every value in `.env.local` from steps a, c, e above (step d needs no value — Reddit fetch
 is unauthenticated; Google OAuth Client ID/Secret from step b are *not* entered here either — they
-live only in the Supabase dashboard; the `STRIPE_*` values come later, from step h). Then:
+live only in the Supabase dashboard; the `STRIPE_*` values come later, from step h).
+
+**Before running any Prisma command:** `.env.local` is a Next.js-only convention — the Prisma CLI
+doesn't know about it and reads a plain `.env` file instead (confirmed live: `db push` fails with
+"Environment variable not found: DIRECT_URL" even with a fully-populated `.env.local`, because
+Prisma simply never loaded it). Symlink one to the other so there's a single source of truth:
+
+```bash
+ln -s .env.local .env     # both .env and .env.local are gitignored, safe either way
+```
+
+Then:
 
 ```bash
 bunx prisma db push       # pushes prisma/schema.prisma to the real Supabase Postgres DB
