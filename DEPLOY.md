@@ -95,9 +95,9 @@ cd "/Volumes/1TB SSD/brain/raw/VerdictRoom"
 cp .env.local.example .env.local
 ```
 
-Fill in every value in `.env.local` from steps a, c, d, e above (Google OAuth Client ID/Secret from
-step b are *not* entered here — they live only in the Supabase dashboard; the `STRIPE_*` values
-come later, from step h). Then:
+Fill in every value in `.env.local` from steps a, c, e above (step d needs no value — Reddit fetch
+is unauthenticated; Google OAuth Client ID/Secret from step b are *not* entered here either — they
+live only in the Supabase dashboard; the `STRIPE_*` values come later, from step h). Then:
 
 ```bash
 bunx prisma db push       # pushes prisma/schema.prisma to the real Supabase Postgres DB
