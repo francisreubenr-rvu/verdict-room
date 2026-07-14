@@ -1,4 +1,4 @@
-// PurchasePilot — per-source orchestration (PLAN.md §3 step 2).
+// The Verdict Room — per-source orchestration (PLAN.md §3 step 2).
 // Detects platform from URL, fetches content via the matching method, and runs the merged
 // extract+classify LLM call. Returns null (never throws for the "no content" case) so the
 // caller — an API route outside this module's scope — can skip the source gracefully.

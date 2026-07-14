@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PurchasePilot",
+  title: "The Verdict Room",
   description:
     "One input in. Hours of review-watching and review-reading, distilled into a verdict you can trust.",
 };

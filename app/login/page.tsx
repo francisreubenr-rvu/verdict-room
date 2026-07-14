@@ -34,7 +34,7 @@ export default function LoginPage() {
       <main className="flex flex-1 items-center justify-center px-4 py-16 sm:px-6">
         <div className="w-full max-w-[440px] rounded-[30px] bg-card px-9 py-9 shadow-[var(--shadow-raised-lg)] sm:px-10 sm:pt-10 sm:pb-8">
           <span className="flex size-13 items-center justify-center rounded-2xl bg-[linear-gradient(145deg,var(--primary-light),var(--primary))] pb-0.5 font-serif text-2xl font-extrabold text-primary-foreground shadow-[var(--shadow-btn-primary)]">
-            P
+            V
           </span>
           <h1 className="mt-5 font-serif text-3xl font-extrabold tracking-tight">
             Back to the desk.

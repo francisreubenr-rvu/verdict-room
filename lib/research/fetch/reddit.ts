@@ -1,10 +1,10 @@
-// PurchasePilot — Reddit content fetch via OAuth2 client-credentials grant (PLAN.md §2, §3a).
+// The Verdict Room — Reddit content fetch via OAuth2 client-credentials grant (PLAN.md §2, §3a).
 // Module-level token cache: the client-credentials token is reusable until it expires, so
 // short-lived serverless invocations that land within the token's lifetime skip the token
 // fetch entirely. No external cache — a plain variable + expiry timestamp is enough at this scale.
 
 const TOKEN_ENDPOINT = "https://www.reddit.com/api/v1/access_token";
-const USER_AGENT = "web:purchasepilot:v1 (by /u/purchasepilot)";
+const USER_AGENT = "web:theverdictroom:v1 (by /u/theverdictroom)";
 // Bounds each network call so a hung request fails fast instead of riding out the serverless
 // function's own execution-time limit — see youtube.ts for the same reasoning.
 const FETCH_TIMEOUT_MS = 15_000;

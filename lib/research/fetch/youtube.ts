@@ -1,4 +1,4 @@
-// PurchasePilot — YouTube transcript fetch via direct `fetch` (PLAN.md §2).
+// The Verdict Room — YouTube transcript fetch via direct `fetch` (PLAN.md §2).
 // No subprocess/binary (yt-dlp explicitly ruled out for Vercel compatibility). Missing captions
 // is an expected, non-error case — returns null, does not throw.
 

@@ -1,4 +1,4 @@
-// PurchasePilot — generic web content fetch via Jina Reader (PLAN.md §2).
+// The Verdict Room — generic web content fetch via Jina Reader (PLAN.md §2).
 // Free, zero-config baseline usage: no API key required.
 
 // Bounds the network call so a hung Jina Reader request fails fast instead of riding out the

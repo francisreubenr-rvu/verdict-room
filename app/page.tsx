@@ -127,7 +127,7 @@ export default function LandingPage() {
               ))}
             </div>
             <p className="mt-8 max-w-[560px] text-pretty font-serif text-lg leading-relaxed text-muted-foreground">
-              PurchasePilot reads all of it anyway — then labels who got paid, weighs it
+              The Verdict Room reads all of it anyway — then labels who got paid, weighs it
               accordingly, and never lets a coupon code write your verdict.
             </p>
           </div>

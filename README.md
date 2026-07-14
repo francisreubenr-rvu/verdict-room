@@ -1,4 +1,4 @@
-# PurchasePilot
+# The Verdict Room
 
 > One input in. Hours of review-watching and review-reading, distilled into a verdict you can trust.
 

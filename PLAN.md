@@ -1,4 +1,4 @@
-# PurchasePilot — Implementation Plan
+# The Verdict Room — Implementation Plan
 
 > One input in. Hours of review-watching and review-reading, distilled into a verdict you can trust.
 
@@ -8,7 +8,7 @@ A shopper who needs to decide on a purchase spends hours watching YouTube review
 blog/Reddit/e-commerce reviews, and manually separating **sponsored/affiliate** content from
 **organic, uncompensated** opinion — then cross-checking contradictory claims.
 
-**PurchasePilot** takes a single natural-language input and runs the research:
+**The Verdict Room** takes a single natural-language input and runs the research:
 
 ```
 "Best noise-cancelling headphones under $300 for travel, I have an iPhone"
@@ -266,7 +266,7 @@ role from server-side API routes, not directly from the client.
 ## 5. Proposed File Layout
 
 ```
-raw/PurchasePilot/
+raw/VerdictRoom/
   app/
     page.tsx                        # landing: single input + recent history (scoped by auth.uid())
     login/page.tsx                  # Google Sign-In via Supabase Auth

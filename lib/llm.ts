@@ -1,4 +1,4 @@
-// PurchasePilot — Claude wrapper (search-query generation, extract+classify, synthesis).
+// The Verdict Room — Claude wrapper (search-query generation, extract+classify, synthesis).
 // Pure pipeline logic: no Prisma/DB calls in this file. Per PLAN.md §3, all three calls use
 // Claude Sonnet and structured output (forced tool use) so downstream shapes are reliable.
 

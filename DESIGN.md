@@ -1,4 +1,4 @@
-# DESIGN.md — PurchasePilot
+# DESIGN.md — The Verdict Room
 
 Design language: **Warm Clay** — claymorphic pillows on a warm paper surface, serif + mono type
 pairing kept from the original system. Supersedes the earlier flat neobrutalist system (2px ink

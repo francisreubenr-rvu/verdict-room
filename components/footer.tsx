@@ -22,9 +22,9 @@ export function MarketingFooter() {
           <div className="col-span-2 sm:col-span-1">
             <div className="flex items-center gap-2.5">
               <span className="flex size-7 items-center justify-center rounded-xl bg-[linear-gradient(145deg,var(--primary-light),var(--primary))] pb-px font-serif text-base font-extrabold text-primary-foreground shadow-[var(--shadow-btn-primary)]">
-                P
+                V
               </span>
-              <span className="font-serif text-base font-bold">PurchasePilot</span>
+              <span className="font-serif text-base font-bold">The Verdict Room</span>
             </div>
             <p className="mt-3.5 max-w-[250px] font-serif text-sm leading-relaxed text-muted-foreground">
               Hours of review-watching and thread-reading, distilled into a verdict you can check.
@@ -71,7 +71,7 @@ export function MarketingFooter() {
         </div>
         <div className="mt-8 flex flex-wrap items-center justify-between gap-3.5 border-t border-border/60 pt-4">
           <span className="font-mono text-[11px] text-muted-foreground">
-            © 2026 PurchasePilot. Made by people who read the comments.
+            © 2026 The Verdict Room. Made by people who read the comments.
           </span>
           <span className="font-mono text-[11px] text-muted-foreground">
             Opinions were harmed in the making of every verdict.
@@ -87,7 +87,7 @@ export function AppFooter() {
   return (
     <div className="mx-auto mb-6 flex w-[calc(100%-24px)] max-w-[1128px] flex-wrap justify-between gap-3 sm:w-[calc(100%-48px)]">
       <span className="font-mono text-[10.5px] text-muted-foreground">
-        © 2026 PURCHASEPILOT
+        © 2026 THE VERDICT ROOM
       </span>
       <span className="font-mono text-[10.5px] text-muted-foreground">
         SPONSORED ≠ ORGANIC · WEIGH ACCORDINGLY

@@ -60,10 +60,10 @@ export function SiteHeader() {
       <div className="flex items-center justify-between gap-2 rounded-[26px] bg-card/90 py-2 pr-2 pl-3 shadow-[var(--shadow-nav)] backdrop-blur-sm sm:pl-5">
         <Link href="/" className="flex items-center gap-2.5">
           <span className="flex size-8 items-center justify-center rounded-2xl bg-[linear-gradient(145deg,var(--primary-light),var(--primary))] pb-0.5 font-serif text-lg font-extrabold text-primary-foreground shadow-[var(--shadow-btn-primary)] sm:size-9">
-            P
+            V
           </span>
           <span className="hidden font-serif text-lg font-bold tracking-tight sm:inline">
-            PurchasePilot
+            The Verdict Room
           </span>
         </Link>
 

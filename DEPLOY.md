@@ -1,4 +1,4 @@
-# DEPLOY.md — PurchasePilot M6 Manual Checklist
+# DEPLOY.md — The Verdict Room M6 Manual Checklist
 
 This project has never been deployed. There is no live Supabase project, no `.env.local`, no
 Vercel project, and no real API credentials anywhere. Everything in this checklist is a manual
@@ -16,7 +16,7 @@ top of the `trustedDependencies` bun already has for `prisma`/`@prisma/client`/`
 
 ## a. Supabase project + Postgres connection strings
 
-1. Go to https://supabase.com/dashboard → **New project**. Name it (e.g. `purchasepilot`), set a
+1. Go to https://supabase.com/dashboard → **New project**. Name it (e.g. `the-verdict-room`), set a
    database password (save it — you'll need it in the connection strings below), pick a region.
 2. Once provisioned: **Project Settings → Database → Connection string**.
 3. Copy the **pooled** connection string (port `6543`, `?pgbouncer=true`) → this is `DATABASE_URL`.
@@ -82,7 +82,7 @@ Enter all four values into `.env.local` (step f).
 ## f. Local env file + push schema
 
 ```bash
-cd "/Volumes/1TB SSD/brain/raw/PurchasePilot"
+cd "/Volumes/1TB SSD/brain/raw/VerdictRoom"
 cp .env.local.example .env.local
 ```
 
@@ -152,7 +152,7 @@ Real subscription billing (SITE-REDESIGN-PLAN.md §Stage C), not a mockup — th
 
 1. https://dashboard.stripe.com/register → create an account (use **test mode** for local dev;
    switch to live keys only once ready to actually charge people).
-2. **Product catalog → Add product** → name it (e.g. "PurchasePilot Pro"), add a **recurring**
+2. **Product catalog → Add product** → name it (e.g. "The Verdict Room Pro"), add a **recurring**
    price: $12.00/month. Copy the **Price ID** (`price_...`, not the Product ID) → `STRIPE_PRO_PRICE_ID`.
 3. **Developers → API keys** → copy the **Secret key** (`sk_test_...` in test mode) → `STRIPE_SECRET_KEY`.
 4. **Developers → Webhooks → Add endpoint** → URL: `https://<your-domain>/api/billing/webhook`
@@ -171,10 +171,10 @@ To test a subscription end-to-end without a real card: Stripe test mode accepts 
 
 1. https://vercel.com/new → import this Git repository (push it to GitHub/GitLab first if it isn't
    already remote — confirmed via the Vercel MCP `list_projects` tool that no project named
-   `purchasepilot` or similar exists yet under this account's team, so this is a first-time import,
-   not a re-link).
+   `purchasepilot`, `the-verdict-room`, or similar exists yet under this account's team, so this
+   is a first-time import, not a re-link).
 2. Framework preset: Vercel auto-detects Next.js — no override needed.
-3. Root directory: point it at this folder (`raw/PurchasePilot`) if the repo root isn't already
+3. Root directory: point it at this folder (`raw/VerdictRoom`) if the repo root isn't already
    this directory.
 4. **Project Settings → Environment Variables** — add every key from `.env.local.example`, with the
    real values from steps a/c/d/e (same values as your local `.env.local`, not the Google OAuth
@@ -197,7 +197,7 @@ To test a subscription end-to-end without a real card: Stripe test mode accepts 
    Auth already handles the OAuth redirect via its own callback URL (already authorized in step
    b.3), so no additional Google Cloud change is needed for the Vercel domain itself — but confirm
    **Supabase → Authentication → URL Configuration → Site URL / Redirect URLs** includes your real
-   production Vercel URL (e.g. `https://purchasepilot.vercel.app`) once you know it, or Supabase
+   production Vercel URL (e.g. `https://the-verdict-room.vercel.app`) once you know it, or Supabase
    will redirect post-login back to `localhost`.
 
 ---

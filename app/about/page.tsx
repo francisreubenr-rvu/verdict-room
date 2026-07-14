@@ -31,7 +31,7 @@ export default function AboutPage() {
             We read the comments so you don&apos;t have to.
           </h1>
           <p className="mt-6 text-pretty font-serif text-lg leading-relaxed text-[#5a4a32]">
-            PurchasePilot started the way most tools do: with a Tuesday lost to forty tabs.
+            The Verdict Room started the way most tools do: with a Tuesday lost to forty tabs.
             Somewhere between the eleventh “BEST headphones 2026!!” video and a Reddit thread
             contradicting all of them, a thought landed — <em>the information is all here.
             Somebody just has to read it honestly.</em>

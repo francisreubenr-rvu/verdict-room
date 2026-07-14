@@ -1,4 +1,4 @@
-// PurchasePilot — Google Custom Search dispatch (PLAN.md §2, §3 step 1).
+// The Verdict Room — Google Custom Search dispatch (PLAN.md §2, §3 step 1).
 // Pure fetch wrapper: no Prisma/DB calls here.
 
 export type SearchResult = {

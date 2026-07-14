@@ -6,7 +6,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ---
 
-# PurchasePilot — Project Conventions
+# The Verdict Room — Project Conventions
 
 **Plan of record:** `PLAN.md` at this directory's root — read it in full before implementing any
 milestone. It carries the exact stack, Prisma schema, and pipeline architecture decisions, already
