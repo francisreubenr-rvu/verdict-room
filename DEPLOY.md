@@ -60,13 +60,14 @@ Enter all four values into `.env.local` (step f).
 
 ---
 
-## d. Reddit script app (OAuth2 client-credentials)
+## d. Reddit — no setup needed
 
-1. https://www.reddit.com/prefs/apps (logged in) → **create another app...** at the bottom.
-2. Name it, select type **script**, set the "redirect uri" to anything valid
-   (e.g. `http://localhost:3000` — unused by the client-credentials grant, but required by the form).
-3. After creating: the string under the app name (below the icon) is `REDDIT_CLIENT_ID`; the
-   "secret" field is `REDDIT_CLIENT_SECRET`.
+**Changed 2026-07-15:** originally specified an OAuth2 client-credentials grant requiring a
+registered Reddit account + script app (see git history for the old version of this step). Hit
+signup friction during deployment, so `lib/research/fetch/reddit.ts` now fetches Reddit's public,
+unauthenticated `<permalink>.json` endpoints instead — no Reddit account, no env vars, nothing to
+do here. Trade-off accepted: stricter/undocumented unauthenticated rate limits vs. the OAuth tier,
+fine at this project's request volume. Revisit if Reddit starts throttling/blocking the requests.
 
 ---
 
@@ -177,15 +178,13 @@ To test a subscription end-to-end without a real card: Stripe test mode accepts 
 3. Root directory: point it at this folder (`raw/VerdictRoom`) if the repo root isn't already
    this directory.
 4. **Project Settings → Environment Variables** — add every key from `.env.local.example`, with the
-   real values from steps a/c/d/e (same values as your local `.env.local`, not the Google OAuth
-   Client ID/Secret — those stay Supabase-dashboard-only):
+   real values from steps a/c/e (same values as your local `.env.local`, not the Google OAuth
+   Client ID/Secret — those stay Supabase-dashboard-only; no Reddit vars exist per step d):
    - `ANTHROPIC_API_KEY`
    - `GOOGLE_CUSTOM_SEARCH_API_KEY`
    - `GOOGLE_CUSTOM_SEARCH_CX`
    - `DATABASE_URL`
    - `DIRECT_URL`
-   - `REDDIT_CLIENT_ID`
-   - `REDDIT_CLIENT_SECRET`
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `STRIPE_SECRET_KEY`

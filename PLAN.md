@@ -59,8 +59,9 @@ accounts now exist (see §4a):
   free search source (e.g. Jina's `s.jina.ai`). Noted here so it isn't a surprise later, not solved now.
 - Secrets: `ANTHROPIC_API_KEY`, `GOOGLE_CUSTOM_SEARCH_API_KEY`, `GOOGLE_CUSTOM_SEARCH_CX`,
   `GOOGLE_OAUTH_CLIENT_ID`/`SECRET` (configured in Supabase Auth's Google provider, not read
-  directly by the app), `DATABASE_URL` (Supabase Postgres connection string), `REDDIT_CLIENT_ID`/
-  `SECRET`, `NEXT_PUBLIC_SUPABASE_URL`/`ANON_KEY`. All in `.env.local`, never committed.
+  directly by the app), `DATABASE_URL` (Supabase Postgres connection string),
+  `NEXT_PUBLIC_SUPABASE_URL`/`ANON_KEY`. All in `.env.local`, never committed. (No Reddit secret —
+  see the Web/content fetching note below on why that changed from the original OAuth plan.)
 
 ### Why Vercel is viable now (it wasn't under the SQLite-only design)
 
@@ -73,8 +74,7 @@ of one big background process. See §3a for the exact chaining mechanism.
 ### Web/content fetching (unchanged reasoning, one method swapped for Vercel compatibility)
 
 `repos/agent-reach` still doesn't fit (Python CLI for an agent's own shell, not an app backend —
-see prior analysis). Reddit still has no zero-config unattended path, so a real OAuth app is still
-required. One change from the earlier draft: **`yt-dlp` as a subprocess is dropped** — Vercel's
+see prior analysis). One change from the earlier draft: **`yt-dlp` as a subprocess is dropped** — Vercel's
 Node.js function runtime doesn't reliably support spawning arbitrary Python/ffmpeg-dependent
 binaries (bundling, cold starts, and cloud-IP blocking from YouTube's side all stack against it).
 Replaced with a **pure-`fetch` YouTube transcript call** (hitting YouTube's `timedtext` endpoint
@@ -85,7 +85,13 @@ shared risk with any hosting choice, not something either fetch method eliminate
 
 - **YouTube** — direct `fetch` against YouTube's transcript endpoint. No auth needed.
 - **Web (blogs, e-commerce reviews)** — Jina Reader (`r.jina.ai/<url>`), free, zero-config.
-- **Reddit** — Reddit API app (OAuth2 client-credentials grant), called directly with `fetch`.
+- **Reddit** — public, unauthenticated `<permalink>.json` endpoints, called directly with `fetch`.
+  **Changed 2026-07-15** from the original OAuth2 client-credentials grant: that path requires a
+  registered Reddit account + script app, which hit real signup friction during deployment. The
+  public JSON endpoints return the same post+comments payload, no auth needed — trade-off is
+  stricter/undocumented unauthenticated rate limits vs. the OAuth tier, accepted given this
+  project's low request volume (a handful of Reddit URLs per session). Revisit if Reddit starts
+  throttling/blocking these requests at scale.
 - **Search discovery** — Google Custom Search API, called directly with `fetch`.
 
 ## 3. Research Pipeline (the core)
@@ -287,7 +293,7 @@ raw/VerdictRoom/
       fetch/
         youtube.ts                    # direct-fetch transcript retrieval
         web.ts                        # Jina Reader wrapper
-        reddit.ts                     # Reddit OAuth2 client-credentials + fetch
+        reddit.ts                     # public unauthenticated <permalink>.json fetch
       extract.ts                    # per-source structured extraction + sponsorship classification (merged)
       synthesize.ts                 # ranking + verdict + option canonicalization
   components/                     # shadcn/ui: Input, ReportCard, SourceList, Verdict, Progress

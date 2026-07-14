@@ -1,49 +1,18 @@
-// The Verdict Room — Reddit content fetch via OAuth2 client-credentials grant (PLAN.md §2, §3a).
-// Module-level token cache: the client-credentials token is reusable until it expires, so
-// short-lived serverless invocations that land within the token's lifetime skip the token
-// fetch entirely. No external cache — a plain variable + expiry timestamp is enough at this scale.
+// The Verdict Room — Reddit content fetch via public JSON endpoints (no auth).
+// Deviates from PLAN.md §2/§3a's original OAuth2 client-credentials grant — that path requires
+// registering a Reddit account + script app, which the user hit signup friction on. This fetches
+// the same public post+comments payload Reddit's API would return, just via the unauthenticated
+// `<permalink>.json` endpoint instead of oauth.reddit.com. Trade-off: stricter, undocumented
+// unauthenticated rate limits (Reddit's OAuth tier is far more generous) — acceptable for this
+// project's low request volume (a handful of Reddit URLs per research session), revisit if
+// throttling becomes a real problem.
 
-const TOKEN_ENDPOINT = "https://www.reddit.com/api/v1/access_token";
-const USER_AGENT = "web:theverdictroom:v1 (by /u/theverdictroom)";
+// Reddit rate-limits/blocks requests without a descriptive User-Agent even on the public,
+// unauthenticated JSON endpoints — this is not optional even though there's no OAuth token.
+const USER_AGENT = "web:theverdictroom:v1 (public JSON, no OAuth)";
 // Bounds each network call so a hung request fails fast instead of riding out the serverless
 // function's own execution-time limit — see youtube.ts for the same reasoning.
 const FETCH_TIMEOUT_MS = 15_000;
-
-let cachedToken: { accessToken: string; expiresAt: number } | null = null;
-
-async function getAccessToken(): Promise<string> {
-  if (cachedToken && cachedToken.expiresAt > Date.now()) {
-    return cachedToken.accessToken;
-  }
-
-  const clientId = process.env.REDDIT_CLIENT_ID;
-  const clientSecret = process.env.REDDIT_CLIENT_SECRET;
-  if (!clientId || !clientSecret) {
-    throw new Error("REDDIT_CLIENT_ID or REDDIT_CLIENT_SECRET is not set");
-  }
-
-  const response = await fetch(TOKEN_ENDPOINT, {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-      "User-Agent": USER_AGENT,
-    },
-    body: "grant_type=client_credentials",
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Reddit token request failed (${response.status}): ${response.statusText}`);
-  }
-
-  const body = (await response.json()) as { access_token: string; expires_in: number };
-
-  // Subtract a small safety margin so we never use a token that expires mid-flight.
-  const expiresAt = Date.now() + (body.expires_in - 60) * 1000;
-  cachedToken = { accessToken: body.access_token, expiresAt };
-  return body.access_token;
-}
 
 type RedditCommentData = {
   body?: string;
@@ -75,21 +44,13 @@ export async function fetchRedditContent(
     return null;
   }
 
-  let accessToken: string;
-  try {
-    accessToken = await getAccessToken();
-  } catch {
-    return null;
-  }
-
   // This function documents "returns null, does not throw" — wrap the network call + JSON
   // parsing so that holds for network-level failures and unexpected response shapes (e.g. a
   // non-`/comments/` path such as a share link, which doesn't return the [post, comments] array
   // shape assumed below), not just non-2xx HTTP responses.
   try {
-    const response = await fetch(`https://oauth.reddit.com${pathname}`, {
+    const response = await fetch(`https://www.reddit.com${pathname}.json`, {
       headers: {
-        Authorization: `Bearer ${accessToken}`,
         "User-Agent": USER_AGENT,
       },
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
