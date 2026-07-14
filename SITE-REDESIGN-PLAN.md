@@ -109,6 +109,8 @@ user provisions Stripe, same as every other external service in this project.
 - [x] Stage C: billing + quota
 - [x] Build/lint verification + live visual check (desktop + mobile) of new pages
 - [x] DEPLOY.md / .env.local.example updated for Stripe (§h, renumbered i/j for Vercel/Deploy)
+- [x] Rebrand: PurchasePilot -> The Verdict Room (name chosen via wiki/branding/ methodology,
+  directory renamed `raw/PurchasePilot` -> `raw/VerdictRoom`, every product-facing string updated)
 
 All done. Notes from implementation:
 - Stripe client (`lib/stripe.ts`) had to be a lazy singleton (`getStripe()`), not a module-level
