@@ -14,7 +14,7 @@ with links, a sponsored-vs-organic split, common complaints, and a final verdict
 | UI | Tailwind CSS 4, shadcn/ui, Zustand, TanStack Query |
 | Data | Prisma → Supabase Postgres |
 | Auth | Supabase Auth (Google Sign-In only) |
-| LLM | Anthropic Claude (`@anthropic-ai/sdk`) |
+| LLM | DeepSeek (`openai` SDK, OpenAI-compatible endpoint) |
 | Search | Google Custom Search API |
 | Deploy | Vercel (`@vercel/functions` `waitUntil` for the chained research pipeline) |
 

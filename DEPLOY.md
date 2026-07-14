@@ -71,12 +71,17 @@ fine at this project's request volume. Revisit if Reddit starts throttling/block
 
 ---
 
-## e. Anthropic API key
+## e. DeepSeek API key
 
-1. https://console.anthropic.com/settings/keys → **Create Key**.
-2. Copy it → `ANTHROPIC_API_KEY`. Make sure the account has billing/credits attached — the
-   research pipeline makes real Claude calls (search-query generation, per-source extract+classify,
-   synthesis; ~13 calls/session, ~$0.50 soft budget per PLAN.md §3).
+**Changed 2026-07-15** from the original Anthropic/Claude choice — see PLAN.md §8.
+
+1. https://platform.deepseek.com/api_keys → **Create new API key**.
+2. Copy it → `DEEPSEEK_API_KEY`. Make sure the account has billing/credits attached — the
+   research pipeline makes real DeepSeek calls (search-query generation, per-source
+   extract+classify, synthesis; ~13 calls/session per PLAN.md §3). DeepSeek's per-token pricing is
+   published at https://platform.deepseek.com/api-docs/pricing — not re-measured against this
+   pipeline's actual token usage yet, so budget for a session or two of real usage before trusting
+   any specific per-session cost figure.
 
 ---
 
@@ -180,7 +185,7 @@ To test a subscription end-to-end without a real card: Stripe test mode accepts 
 4. **Project Settings → Environment Variables** — add every key from `.env.local.example`, with the
    real values from steps a/c/e (same values as your local `.env.local`, not the Google OAuth
    Client ID/Secret — those stay Supabase-dashboard-only; no Reddit vars exist per step d):
-   - `ANTHROPIC_API_KEY`
+   - `DEEPSEEK_API_KEY`
    - `GOOGLE_CUSTOM_SEARCH_API_KEY`
    - `GOOGLE_CUSTOM_SEARCH_CX`
    - `DATABASE_URL`

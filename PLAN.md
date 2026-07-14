@@ -49,7 +49,9 @@ accounts now exist (see §4a):
 - **Supabase**: Postgres (via Prisma) for all persistence, **Supabase Auth** for Google Sign-In,
   optionally **Supabase Realtime** later for live status instead of polling (v1 uses polling —
   see §3a).
-- **LLM**: Anthropic Claude (via `@anthropic-ai/sdk`) for extraction + synthesis.
+- **LLM**: DeepSeek (`deepseek-chat`, via the `openai` SDK pointed at DeepSeek's OpenAI-compatible
+  endpoint) for extraction + synthesis. **Changed 2026-07-15** from the original Claude Sonnet
+  choice — see §8 for why.
 - **Search discovery**: Google Custom Search API (`customsearch.googleapis.com`) — replaces the
   earlier plan to hand-roll query dispatch against ad hoc scrapers. **Known constraint: the free
   tier is 100 queries/day, shared across the whole app, not per user.** At 3-5 search calls per
@@ -57,7 +59,7 @@ accounts now exist (see §4a):
   v1 personal/low-traffic tool, a real limit the moment this gets shared. No fallback is being
   built for this in v1 (YAGNI) — if usage grows, options are the paid tier or swapping in a second
   free search source (e.g. Jina's `s.jina.ai`). Noted here so it isn't a surprise later, not solved now.
-- Secrets: `ANTHROPIC_API_KEY`, `GOOGLE_CUSTOM_SEARCH_API_KEY`, `GOOGLE_CUSTOM_SEARCH_CX`,
+- Secrets: `DEEPSEEK_API_KEY`, `GOOGLE_CUSTOM_SEARCH_API_KEY`, `GOOGLE_CUSTOM_SEARCH_CX`,
   `GOOGLE_OAUTH_CLIENT_ID`/`SECRET` (configured in Supabase Auth's Google provider, not read
   directly by the app), `DATABASE_URL` (Supabase Postgres connection string),
   `NEXT_PUBLIC_SUPABASE_URL`/`ANON_KEY`. All in `.env.local`, never committed. (No Reddit secret —
@@ -133,9 +135,9 @@ the whole thing, each step is its own short-lived API route, chained together, w
 
 | Question | Decision |
 |---|---|
-| LLM provider/model | Claude Sonnet for extract+classify and synthesis. |
+| LLM provider/model | DeepSeek (`deepseek-chat`) for extract+classify and synthesis — changed 2026-07-15 from Claude Sonnet, see §8. |
 | Source cap | 12 sources/session — chosen for cost, not execution time (each source is its own bounded function call now, so the old "does it fit in one timeout" driver no longer applies, but the cost ceiling below still does). |
-| Per-session cost ceiling | ~$0.50 soft budget (≈13 Claude calls: up to 12 extract+classify + 1 synthesis; search-query generation is one more LLM call, already counted in the search step). |
+| Per-session cost ceiling | Was ~$0.50 soft budget under Claude Sonnet (≈13 calls: up to 12 extract+classify + 1 synthesis; search-query generation is one more LLM call, already counted in the search step). DeepSeek's published per-token pricing is substantially lower, so the real per-session cost is lower too — not re-measured against actual token usage yet, so no new number is stated here rather than guessing one. |
 | Auto-exclude sponsored content? | No — label and show separately. |
 | Search source | Google Custom Search API — see §2 for the 100-queries/day free-tier constraint. |
 
@@ -287,7 +289,7 @@ raw/VerdictRoom/
     supabase/
       client.ts                     # browser Supabase client (auth)
       server.ts                     # server Supabase client (auth verification in API routes)
-    llm.ts                          # Claude wrapper (extract+classify, synthesize)
+    llm.ts                          # DeepSeek wrapper (extract+classify, synthesize)
     research/
       search.ts                     # query generation (LLM) + Google Custom Search dispatch
       fetch/
@@ -328,7 +330,11 @@ didn't reopen that scope decision.)
 
 ## 8. Resolved Decisions
 
-- **LLM provider/model + cost ceiling:** Claude Sonnet, ~$0.50/session soft budget — see §3 table.
+- **LLM provider/model:** DeepSeek (`deepseek-chat`) — see §3 table. Originally Claude Sonnet;
+  changed 2026-07-15 at the user's request during deployment (no architectural driver, just a
+  provider preference). `deepseek-reasoner` (R1) was considered and rejected: it doesn't reliably
+  support the forced function-calling every call in `lib/llm.ts` depends on for a guaranteed
+  response shape.
 - **Source cap:** 12 sources/session — see §3 table.
 - **Sponsored-content handling:** label + show separately, never silently auto-exclude — see §3 table.
 - **Deploy target:** Vercel — see §2 for why this is now viable (Supabase-backed chained execution).

@@ -10,7 +10,6 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.111.0",
     "@base-ui/react": "^1.6.0",
     "@prisma/client": "^6",
     "@supabase/ssr": "^0.12.0",
@@ -21,6 +20,7 @@
     "clsx": "^2.1.1",
     "lucide-react": "^1.24.0",
     "next": "16.2.10",
+    "openai": "^6.46.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "shadcn": "^4.13.0",
