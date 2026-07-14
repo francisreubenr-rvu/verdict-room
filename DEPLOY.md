@@ -22,12 +22,11 @@ top of the `trustedDependencies` bun already has for `prisma`/`@prisma/client`/`
 3. Copy the **pooled** connection string (dropdown/tab labeled "Transaction pooler", port `6543`)
    → this is `DATABASE_URL`. Append `?pgbouncer=true` if it isn't already there — Prisma needs
    that flag to disable prepared statements over the pooler connection.
-4. Copy the **direct** connection string (dropdown/tab labeled "Direct connection", port `5432`)
-   → this is `DIRECT_URL`. **These two use different hostname formats — don't reuse one for the
-   other.** Direct connections look like `db.<project-ref>.supabase.co`; pooled connections look
-   like `aws-<n>-<region>.pooler.supabase.com` with the project ref folded into the *username*
-   (`postgres.<project-ref>`) instead of the host. Copy each from its own tab rather than editing
-   one string to make the other.
+4. For `DIRECT_URL`, **use the "Session pooler" tab (port `5432`), NOT "Direct connection".**
+   Confirmed live: the raw "Direct connection" host (`db.<project-ref>.supabase.co`) is IPv6-only
+   and fails with `P1001: Can't reach database server` on any network without outbound IPv6 —
+   which is most home/ISP networks. "Session pooler" uses the same pooler host as step 3
+   (`aws-<n>-<region>.pooler.supabase.com`) on port `5432` instead, and is IPv4-compatible.
 5. Substitute your real database password into both (replace `[YOUR-PASSWORD]`).
 6. **Project Settings → API** → copy the **Project URL** → `NEXT_PUBLIC_SUPABASE_URL`, and the
    **anon/public key** → `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
