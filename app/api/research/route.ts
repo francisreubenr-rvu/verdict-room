@@ -119,7 +119,13 @@ async function discoverSources(
 // through Groq's free-tier 30 req/min ceiling immediately. This runs entirely inside the
 // waitUntil-tracked tail below (see continueSearch), never blocking the client-facing response,
 // so the delay costs nothing in perceived latency.
-const DISPATCH_STAGGER_MS = 1200;
+//
+// Raised from 1200ms to 2500ms 2026-07-15: confirmed live at 1200ms a 41-source session still
+// hit repeated 429s (Groq's 30 req/min ceiling is 1 request per 2s sustainable, and each request
+// also holds a token reservation for a few seconds, not just a request slot) — roughly half the
+// sources failed. 2500ms trades session completion time for reliability, which matters more here
+// since the whole point of the higher source cap is actually gathering that many sources.
+const DISPATCH_STAGGER_MS = 2500;
 
 // The actual search + dispatch work, run as a detached tail via waitUntil so the client gets the
 // session id (and can start polling/rendering real "queued"/"searching" progress) immediately
