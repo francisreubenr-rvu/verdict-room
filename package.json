@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "touch .env",
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
