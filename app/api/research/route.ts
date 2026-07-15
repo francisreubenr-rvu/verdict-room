@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { createClient } from "@/lib/supabase/server";
 import { generateSearchQueries } from "@/lib/llm";
 import { webSearch, SearchProviderError } from "@/lib/research/search";
-import { internalHeaders, internalUrl } from "@/lib/internal-pipeline";
+import { dispatchInternal, internalHeaders, internalUrl } from "@/lib/internal-pipeline";
 import { STALE_SESSION_MS, TERMINAL_STATUSES } from "@/components/research-types";
 import {
   FREE_MONTHLY_REPORT_LIMIT,
@@ -215,11 +215,15 @@ export async function POST(request: Request) {
     for (const url of urls) {
       const target = internalUrl(`/api/research/${session.id}/process-source`, request);
       waitUntil(
-        fetch(target, {
-          method: "POST",
-          headers: internalHeaders({ "Content-Type": "application/json" }),
-          body: JSON.stringify({ url }),
-        })
+        dispatchInternal(
+          target,
+          {
+            method: "POST",
+            headers: internalHeaders({ "Content-Type": "application/json" }),
+            body: JSON.stringify({ url }),
+          },
+          "POST /api/research"
+        )
       );
     }
   }

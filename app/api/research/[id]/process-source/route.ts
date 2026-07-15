@@ -3,7 +3,12 @@ import { waitUntil } from "@vercel/functions";
 import { prisma } from "@/lib/db";
 import { processSource } from "@/lib/research/extract";
 import { isTerminalStatus, TERMINAL_STATUSES } from "@/components/research-types";
-import { assertInternalCaller, internalHeaders, internalUrl } from "@/lib/internal-pipeline";
+import {
+  assertInternalCaller,
+  dispatchInternal,
+  internalHeaders,
+  internalUrl,
+} from "@/lib/internal-pipeline";
 
 // PLAN.md §3 step 2: fetch + extract + classify one source, then check whether this was the
 // last outstanding source for the session and — if so — kick off synthesize.
@@ -178,7 +183,13 @@ export async function POST(
 
       if (flipped.count > 0) {
         const target = internalUrl(`/api/research/${sessionId}/synthesize`, request);
-        waitUntil(fetch(target, { method: "POST", headers: internalHeaders() }));
+        waitUntil(
+          dispatchInternal(
+            target,
+            { method: "POST", headers: internalHeaders() },
+            "process-source"
+          )
+        );
       }
     }
   }

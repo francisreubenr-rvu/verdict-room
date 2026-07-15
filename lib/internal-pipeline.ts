@@ -39,9 +39,39 @@ export function internalHeaders(extra?: Record<string, string>): Record<string, 
 // Building the next hop's URL from `new URL(path, request.url)` trusts the inbound Host header,
 // which some Vercel preview configurations forward from client-supplied values — a spoofed Host
 // would redirect the chained fetch (including the source URL body) to an attacker-controlled
-// origin. VERCEL_URL is the platform-assigned deployment hostname, not attacker-influenceable;
-// fall back to request.url only for local dev, where VERCEL_URL doesn't exist.
+// origin. VERCEL_PROJECT_PRODUCTION_URL is the project's assigned production domain (e.g.
+// verdict-room.vercel.app) — platform-assigned, not attacker-influenceable, and NOT behind
+// Vercel's deployment-protection SSO wall.
+//
+// Confirmed live 2026-07-15: an earlier version of this used VERCEL_URL (the per-deployment
+// hostname, e.g. verdict-room-<hash>-<team>.vercel.app) instead — that one IS behind deployment
+// protection by default. The waitUntil fetch got silently 302-redirected to
+// vercel.com/sso-api instead of reaching process-source, with no error anywhere (fetch() doesn't
+// reject on a redirect/non-2xx, and nothing here was checking response.ok), reproducing the
+// exact "zero process-source invocations, zero errors" symptom the original Google Search bug
+// had — diagnosed by testing the per-deployment URL directly and finding the SSO redirect.
 export function internalUrl(path: string, request: Request): URL {
-  const base = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : request.url;
+  const base = process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : request.url;
   return new URL(path, base);
+}
+
+// waitUntil(fetch(...)) alone swallows everything: a non-2xx response (redirect, 401, 500) is
+// not a rejected promise, so nothing here would ever know a hop failed to actually run — this is
+// exactly how two real bugs (Google Search silently failing, then VERCEL_URL's deployment-
+// protection redirect) went undetected until a live end-to-end test caught them. Logs on any
+// non-ok response or thrown error so a future regression shows up in `get_runtime_errors` instead
+// of requiring another live investigation. Returns the fetch promise so the caller can still pass
+// it to waitUntil() to extend the invocation's lifetime.
+export function dispatchInternal(url: URL, init: RequestInit, context: string): Promise<void> {
+  return fetch(url, init)
+    .then((response) => {
+      if (!response.ok) {
+        console.error(`${context}: internal dispatch to ${url} returned ${response.status}`);
+      }
+    })
+    .catch((err) => {
+      console.error(`${context}: internal dispatch to ${url} threw`, err);
+    });
 }
