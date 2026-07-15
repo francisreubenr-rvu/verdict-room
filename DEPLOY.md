@@ -184,25 +184,17 @@ actually applies to app traffic on `ResearchSession`/`Option`.
 
 ---
 
-## h. Stripe — Pro subscription billing
+## h. Stripe — SKIPPED (not available for India-based merchants)
 
-Real subscription billing (SITE-REDESIGN-PLAN.md §Stage C), not a mockup — the Pricing page's
-"Go Pro" button hits real Stripe Checkout, and a webhook keeps plan status in sync.
+**Skipped 2026-07-15.** Stripe doesn't support standard merchant accounts based in India, which
+rules it out as-is. The Pricing page's Pro card now ships as a disabled "Coming soon" state (no
+live checkout button) rather than a broken one — see the pricing page commit for that change. The
+billing routes (`app/api/billing/*`), `Subscription` Prisma model + RLS policy, and `lib/stripe.ts`
+all still exist in the codebase, dormant and harmless, for whenever a payment processor that
+supports Indian merchants is wired in (Razorpay, Lemon Squeezy, and Paddle all do — none of these
+have been evaluated yet, this is just naming the option space, not a recommendation).
 
-1. https://dashboard.stripe.com/register → create an account (use **test mode** for local dev;
-   switch to live keys only once ready to actually charge people).
-2. **Product catalog → Add product** → name it (e.g. "The Verdict Room Pro"), add a **recurring**
-   price: $12.00/month. Copy the **Price ID** (`price_...`, not the Product ID) → `STRIPE_PRO_PRICE_ID`.
-3. **Developers → API keys** → copy the **Secret key** (`sk_test_...` in test mode) → `STRIPE_SECRET_KEY`.
-4. **Developers → Webhooks → Add endpoint** → URL: `https://<your-domain>/api/billing/webhook`
-   (for local testing, use the Stripe CLI: `stripe listen --forward-to localhost:3000/api/billing/webhook`,
-   which prints a `whsec_...` you can use locally without a public URL). Select events:
-   `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`.
-   Copy the **Signing secret** (`whsec_...`) → `STRIPE_WEBHOOK_SECRET`.
-5. Enter all three values into `.env.local` (or Vercel env vars — step i).
-
-To test a subscription end-to-end without a real card: Stripe test mode accepts `4242 4242 4242
-4242` with any future expiry/CVC on the Checkout page.
+No `STRIPE_*` env vars are needed anywhere (local `.env.local` or Vercel) until this is revisited.
 
 ---
 
@@ -217,7 +209,8 @@ To test a subscription end-to-end without a real card: Stripe test mode accepts 
    this directory.
 4. **Project Settings → Environment Variables** — add every key from `.env.local.example`, with the
    real values from steps a/c/e (same values as your local `.env.local`, not the Google OAuth
-   Client ID/Secret — those stay Supabase-dashboard-only; no Reddit vars exist per step d):
+   Client ID/Secret — those stay Supabase-dashboard-only; no Reddit vars exist per step d; no
+   `STRIPE_*` vars exist per step h):
    - `GROQ_API_KEY`
    - `GOOGLE_CUSTOM_SEARCH_API_KEY`
    - `GOOGLE_CUSTOM_SEARCH_CX`
@@ -225,10 +218,6 @@ To test a subscription end-to-end without a real card: Stripe test mode accepts 
    - `DIRECT_URL`
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - `STRIPE_SECRET_KEY`
-   - `STRIPE_PRO_PRICE_ID`
-   - `STRIPE_WEBHOOK_SECRET` (the production Stripe CLI/dashboard webhook endpoint's signing
-     secret — different from the local `stripe listen` one in step h.4)
    Apply each to Production (and Preview/Development if you want preview deploys to work too).
 5. In Google Cloud Console (step b), add the production Vercel domain's callback flow: Supabase
    Auth already handles the OAuth redirect via its own callback URL (already authorized in step
@@ -247,10 +236,9 @@ To test a subscription end-to-end without a real card: Stripe test mode accepts 
 3. Once live, sign in with Google end-to-end, run one real research query, and confirm a session
    completes (`queued → ... → done`) and rows land in Supabase (`ResearchSession`, `Source`,
    `Finding`, `Option`).
-4. Add a **production** webhook endpoint in the Stripe dashboard (step h.4) pointing at
-   `https://<your-real-domain>/api/billing/webhook` — the local `stripe listen` one only covers
-   dev. Run a test Pro subscription end-to-end (test card `4242 4242 4242 4242`) and confirm the
-   `Subscription` row flips to `plan: pro`.
+4. Stripe production webhook step skipped — see step h (Stripe skipped, not available for
+   India-based merchants). The Pricing page's Pro card is a static "Coming soon" state; there's
+   no checkout flow to smoke-test.
 5. If anything fails at runtime with an auth/DB error, re-check step g (RLS policy) and step i.5
    (Site URL) first — those are the two steps most likely to silently pass a build but fail at
    runtime.
