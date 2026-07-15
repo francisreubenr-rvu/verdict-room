@@ -77,6 +77,10 @@ export async function fetchYoutubeTranscript(
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        // See lib/research/search.ts's youtubeSearch for why: confirmed live that Vercel's
+        // outbound IPs hit a consent/localization redirect loop on youtube.com without this
+        // (Google's consent gate is site-wide, not path-specific, so the same fix applies here).
+        Cookie: "CONSENT=YES+1",
       },
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
@@ -125,8 +129,13 @@ export async function fetchYoutubeTranscript(
     }
 
     return { content, author };
-  } catch {
-    // Network error, timeout, or abort — treat the same as "no transcript available".
+  } catch (err) {
+    // Network error, timeout, or abort — still treated as "no transcript available" (the
+    // caller degrades gracefully, this isn't fatal to the session), but logged rather than
+    // silent so a systemic issue (e.g. the redirect-loop bug this file's fetch call already
+    // hit once, see the Cookie header above) is diagnosable from get_runtime_errors instead of
+    // just looking like "YouTube sources never contribute anything."
+    console.error(`fetchYoutubeTranscript: request for ${url} threw`, err);
     return null;
   }
 }

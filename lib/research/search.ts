@@ -184,6 +184,12 @@ export async function youtubeSearch(query: string): Promise<SearchResult[]> {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        // Confirmed live 2026-07-15: without this, requests from Vercel's outbound IPs threw
+        // "TypeError: fetch failed — redirect count exceeded" (get_runtime_errors), while the
+        // exact same request worked fine from a dev shell — a consent/localization redirect
+        // loop that never resolves without a session cookie. CONSENT=YES+1 is the standard,
+        // well-documented bypass for Google/YouTube's consent interstitial.
+        Cookie: "CONSENT=YES+1",
       },
       signal: AbortSignal.timeout(YOUTUBE_FETCH_TIMEOUT_MS),
     });
