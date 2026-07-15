@@ -162,7 +162,20 @@ create policy "Users can access options on their own sessions"
         and auth.uid()::text = "ResearchSession"."userId"
     )
   );
+
+alter table "Subscription" enable row level security;
+
+create policy "Users can access their own subscription"
+  on "Subscription"
+  for all
+  using (auth.uid()::text = "userId")
+  with check (auth.uid()::text = "userId");
 ```
+
+`Subscription` added 2026-07-15 — this table didn't exist when the RLS SQL above was first
+written (it's from the later Stripe billing pass), but it's private per-user billing data just
+like `ResearchSession`/`Option`, so it gets the same policy shape rather than being silently left
+without RLS.
 
 `Source`, `Finding`, and `SessionSource` intentionally stay **without** RLS (PLAN.md §4a: the cache
 is shared content, writable only via the service-role key from server-side API routes). Verify
