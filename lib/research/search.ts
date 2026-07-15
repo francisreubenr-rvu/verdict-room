@@ -180,21 +180,43 @@ export async function youtubeSearch(query: string): Promise<SearchResult[]> {
     const url = new URL("https://www.youtube.com/results");
     url.searchParams.set("search_query", query);
 
-    const response = await fetch(url.toString(), {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        // Confirmed live 2026-07-15: without this, requests from Vercel's outbound IPs threw
-        // "TypeError: fetch failed — redirect count exceeded" (get_runtime_errors), while the
-        // exact same request worked fine from a dev shell — a consent/localization redirect
-        // loop that never resolves without a session cookie. CONSENT=YES+1 is the standard,
-        // well-documented bypass for Google/YouTube's consent interstitial.
-        Cookie: "CONSENT=YES+1",
-      },
-      signal: AbortSignal.timeout(YOUTUBE_FETCH_TIMEOUT_MS),
-    });
-    if (!response.ok) {
-      console.error(`youtubeSearch: request for "${query}" returned ${response.status}`);
+    // redirect: "manual" + a hand-rolled loop, not fetch's automatic "follow" — the CONSENT
+    // cookie alone didn't stop the redirect-loop crash seen live (get_runtime_errors still
+    // showed "redirect count exceeded" with it attached), so this traces the actual Location
+    // chain instead of guessing at another blind fix. Capped at 5 hops with every one logged.
+    let currentUrl = url.toString();
+    let response: Response | null = null;
+    const cookieJar: string[] = ["CONSENT=YES+1"];
+
+    for (let hop = 0; hop < 5; hop++) {
+      response = await fetch(currentUrl, {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+          Cookie: cookieJar.join("; "),
+        },
+        redirect: "manual",
+        signal: AbortSignal.timeout(YOUTUBE_FETCH_TIMEOUT_MS),
+      });
+
+      if (response.status < 300 || response.status >= 400) {
+        break;
+      }
+
+      const location = response.headers.get("location");
+      const setCookie = response.headers.get("set-cookie");
+      console.error(
+        `youtubeSearch: hop ${hop} for "${query}" -> ${response.status} Location: ${location} SetCookie: ${setCookie}`
+      );
+      if (!location) break;
+      if (setCookie) cookieJar.push(setCookie.split(";")[0]);
+      currentUrl = new URL(location, currentUrl).toString();
+    }
+
+    if (!response || !response.ok) {
+      console.error(
+        `youtubeSearch: request for "${query}" ended at ${response?.status ?? "no response"} (${currentUrl})`
+      );
       return [];
     }
 
