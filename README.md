@@ -11,11 +11,11 @@ with links, a sponsored-vs-organic split, common complaints, and a final verdict
 | Layer | Choice |
 |---|---|
 | Framework | Next.js 16 (App Router), TypeScript, Bun |
-| UI | Tailwind CSS 4, shadcn/ui, Zustand, TanStack Query |
+| UI | Tailwind CSS 4, shadcn/ui, TanStack Query |
 | Data | Prisma → Supabase Postgres |
 | Auth | Supabase Auth (Google Sign-In only) |
 | LLM | Groq (`openai/gpt-oss-120b`, via the `openai` SDK's OpenAI-compatible endpoint support) |
-| Search | Google Custom Search API |
+| Search | Jina Search (`s.jina.ai`) |
 | Deploy | Vercel (`@vercel/functions` `waitUntil` for the chained research pipeline) |
 
 ## Running locally

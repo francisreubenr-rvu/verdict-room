@@ -3,7 +3,7 @@ import { waitUntil } from "@vercel/functions";
 import { prisma } from "@/lib/db";
 import { createClient } from "@/lib/supabase/server";
 import { generateSearchQueries } from "@/lib/llm";
-import { googleCustomSearch, GoogleSearchError } from "@/lib/research/search";
+import { webSearch, SearchProviderError } from "@/lib/research/search";
 import { internalHeaders, internalUrl } from "@/lib/internal-pipeline";
 import { STALE_SESSION_MS, TERMINAL_STATUSES } from "@/components/research-types";
 import {
@@ -139,7 +139,7 @@ export async function POST(request: Request) {
 
   if (!queryParseFailed) {
     try {
-      const batches = await Promise.all(queries.map((q) => googleCustomSearch(q)));
+      const batches = await Promise.all(queries.map((q) => webSearch(q)));
       const seen = new Set<string>();
       for (const batch of batches) {
         for (const result of batch) {
@@ -151,7 +151,7 @@ export async function POST(request: Request) {
       }
       urls = urls.slice(0, 12); // PLAN.md §3 source cap
     } catch (err) {
-      if (err instanceof GoogleSearchError) {
+      if (err instanceof SearchProviderError) {
         searchFailed = true;
       } else {
         throw err;

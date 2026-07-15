@@ -52,14 +52,20 @@ accounts now exist (see §4a):
 - **LLM**: Groq (`openai/gpt-oss-120b`, via the `openai` SDK pointed at Groq's OpenAI-compatible
   endpoint) for extraction + synthesis, chosen for free-tier API access. **Changed 2026-07-15
   twice** — Claude Sonnet -> DeepSeek -> Groq, same day, see §8 for why.
-- **Search discovery**: Google Custom Search API (`customsearch.googleapis.com`) — replaces the
-  earlier plan to hand-roll query dispatch against ad hoc scrapers. **Known constraint: the free
-  tier is 100 queries/day, shared across the whole app, not per user.** At 3-5 search calls per
-  research session, that's roughly 20-30 sessions/day before hitting the quota — acceptable for a
-  v1 personal/low-traffic tool, a real limit the moment this gets shared. No fallback is being
-  built for this in v1 (YAGNI) — if usage grows, options are the paid tier or swapping in a second
-  free search source (e.g. Jina's `s.jina.ai`). Noted here so it isn't a surprise later, not solved now.
-- Secrets: `GROQ_API_KEY`, `GOOGLE_CUSTOM_SEARCH_API_KEY`, `GOOGLE_CUSTOM_SEARCH_CX`,
+- **Search discovery**: ~~Google Custom Search API~~ **Changed 2026-07-15**: replaced with Jina
+  Search (`s.jina.ai`) — see `lib/research/search.ts`. Google's 100 queries/day free tier
+  required enabling the Custom Search JSON API on the exact Google Cloud project the key
+  belonged to, a manual step that got missed at first deploy and silently failed every research
+  session (no error surfaced anywhere — diagnosed after the fact via Vercel runtime logs). Jina
+  was already an existing vendor relationship (content fetching, see the Web/content fetching
+  note below), so the swap reuses one key instead of adding a new one — this was already the
+  named fallback option in the original note here (kept below for the historical reasoning: "if
+  usage grows, options are the paid tier or swapping in a second free search source").
+  Originally: Google Custom Search API (`customsearch.googleapis.com`), replacing the earlier
+  plan to hand-roll query dispatch against ad hoc scrapers. Known constraint: the free tier was
+  100 queries/day, shared across the whole app, not per user — at 3-5 search calls per research
+  session, that's roughly 20-30 sessions/day before hitting the quota.
+- Secrets: `GROQ_API_KEY`, `JINA_API_KEY` (search discovery + content fetching, shared token pool),
   `GOOGLE_OAUTH_CLIENT_ID`/`SECRET` (configured in Supabase Auth's Google provider, not read
   directly by the app), `DATABASE_URL` (Supabase Postgres connection string),
   `NEXT_PUBLIC_SUPABASE_URL`/`ANON_KEY`. All in `.env.local`, never committed. (No Reddit secret —
@@ -94,7 +100,8 @@ shared risk with any hosting choice, not something either fetch method eliminate
   stricter/undocumented unauthenticated rate limits vs. the OAuth tier, accepted given this
   project's low request volume (a handful of Reddit URLs per session). Revisit if Reddit starts
   throttling/blocking these requests at scale.
-- **Search discovery** — Google Custom Search API, called directly with `fetch`.
+- **Search discovery** — Jina Search (`s.jina.ai`), called directly with `fetch`. **Changed
+  2026-07-15** from Google Custom Search API — see §2.
 
 ## 3. Research Pipeline (the core)
 
@@ -104,8 +111,8 @@ the whole thing, each step is its own short-lived API route, chained together, w
 (via Supabase) as the shared state instead of in-memory/process state.
 
 1. **Search** — one LLM call to generate 3-5 targeted queries from the input (product, "best X
-   review", "X reddit", "X problems/complaints", "X sponsored review"), then dispatch each to the
-   Google Custom Search API in parallel to get candidate URLs. Runs inline in the
+   review", "X reddit", "X problems/complaints", "X sponsored review"), then dispatch each to
+   Jina Search (§2) in parallel to get candidate URLs. Runs inline in the
    `POST /api/research` handler (fast — one LLM call + a few parallel HTTP calls, well within a
    single function's time budget) and writes the source URL list to `ResearchSession` before
    returning the session id.
@@ -139,7 +146,7 @@ the whole thing, each step is its own short-lived API route, chained together, w
 | Source cap | 12 sources/session — chosen for cost, not execution time (each source is its own bounded function call now, so the old "does it fit in one timeout" driver no longer applies, but the cost ceiling below still does). |
 | Per-session cost ceiling | Was ~$0.50 soft budget under Claude Sonnet (≈13 calls: up to 12 extract+classify + 1 synthesis; search-query generation is one more LLM call, already counted in the search step). Groq's free tier for `openai/gpt-oss-120b` is 30 req/min, 1K req/day, 8K tokens/min, 200K tokens/day (as of 2026-07-15) rather than a dollar cost — the real constraint is now rate limits, not spend. 8K tokens/min is worth watching: extract+classify sends full source content per call and could approach that ceiling on longer sources. |
 | Auto-exclude sponsored content? | No — label and show separately. |
-| Search source | Google Custom Search API — see §2 for the 100-queries/day free-tier constraint. |
+| Search source | Jina Search (`s.jina.ai`) — changed 2026-07-15 from Google Custom Search API, see §2. |
 
 ## 3a. Async coordination without polling infrastructure
 
@@ -291,7 +298,7 @@ raw/VerdictRoom/
       server.ts                     # server Supabase client (auth verification in API routes)
     llm.ts                          # Groq wrapper (extract+classify, synthesize)
     research/
-      search.ts                     # query generation (LLM) + Google Custom Search dispatch
+      search.ts                     # query generation (LLM) + Jina Search dispatch
       fetch/
         youtube.ts                    # direct-fetch transcript retrieval
         web.ts                        # Jina Reader wrapper
@@ -342,8 +349,8 @@ didn't reopen that scope decision.)
 - **Database:** Supabase Postgres via Prisma — see §4.
 - **Identity:** Supabase Auth, Google Sign-In only in v1 (no email/password, no other providers —
   smallest surface that satisfies "we need accounts now") — see §4a.
-- **Search discovery:** Google Custom Search API, with its 100-queries/day free-tier limit
-  explicitly accepted for v1 rather than solved — see §2.
+- **Search discovery:** Jina Search (`s.jina.ai`) — changed 2026-07-15 from Google Custom
+  Search API, see §2.
 
 ## 9. V2 Backlog (deferred, not forgotten)
 
@@ -359,5 +366,5 @@ evidence the core product gets reused (see §1). If v1 shows repeat usage, v2 ad
 - Supabase Realtime instead of polling for live session status (§3a).
 - A real job-queue/durable-workflow layer if the chained-`waitUntil` pattern (§3a) starts showing
   reliability problems at higher concurrency.
-- A fallback/second search source if the Google Custom Search free tier (§2) becomes a real
-  bottleneck.
+- ~~A fallback/second search source if the Google Custom Search free tier (§2) becomes a real
+  bottleneck.~~ Done 2026-07-15 — swapped to Jina Search, see §2.

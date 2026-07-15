@@ -19,7 +19,8 @@ Next.js 16 (App Router) · TypeScript · Bun · Tailwind CSS 4 · shadcn/ui · T
 · Prisma (Postgres, targeting Supabase) · Supabase Auth (Google Sign-In only) · `@vercel/functions`
 (`waitUntil` for the chained research pipeline) · Groq (`openai` SDK pointed at Groq's
 OpenAI-compatible endpoint, `openai/gpt-oss-120b`, from M2 — see PLAN.md §8 for why this replaced
-Claude then DeepSeek) · Google Custom Search API (from M2).
+Claude then DeepSeek) · Jina Search (`s.jina.ai`, from M2 — see PLAN.md §2 for why this replaced
+Google Custom Search 2026-07-15).
 
 Prisma is pinned to **v6** (`prisma`/`@prisma/client` `^6`), not the current v7. Prisma 7 removed
 `url`/`directUrl` from the `datasource` block in favor of a `prisma.config.ts` + driver-adapter

@@ -51,18 +51,24 @@ Enter all four values into `.env.local` (step f).
 
 ---
 
-## c. Google Programmable Search Engine + Custom Search API key
+## c. Jina — search discovery + web content fetching
 
-1. https://programmablesearchengine.google.com/ → **Add** → configure a search engine that
-   searches the entire web (not a specific site list). Save it and copy the **Search engine ID**
-   (this is `GOOGLE_CUSTOM_SEARCH_CX`).
-2. https://console.cloud.google.com/apis/credentials (same Google Cloud project as step b is fine)
-   → **Enable APIs and Services** → search "Custom Search API" → **Enable**.
-3. On the same Credentials page → **Create Credentials → API key** → copy it
-   (`GOOGLE_CUSTOM_SEARCH_API_KEY`). Optionally restrict the key to the Custom Search API.
-4. **Free tier is 100 queries/day, shared across the whole app** (PLAN.md §2) — at 3-5 search
-   calls per research session that's roughly 20-30 sessions/day before the quota trips. Expected
-   for v1; no fallback is built. If you exceed it, Google returns HTTP 429 until the quota resets.
+**Replaced 2026-07-15** (see `lib/research/search.ts` for why): Google Custom Search required
+enabling the Custom Search JSON API on the exact Google Cloud project the API key belonged to — a
+step that got missed at launch and silently failed every research session with no clear error
+until diagnosed against Vercel runtime logs. Jina was already an existing vendor relationship
+(`lib/research/fetch/web.ts` uses Jina Reader for content fetching), so this reuses one key
+instead of adding a new one.
+
+1. https://jina.ai/api-dashboard/ → sign up (self-serve, no card required) → copy the
+   auto-generated API key → `JINA_API_KEY`.
+2. This single key authenticates both `s.jina.ai` (search discovery,
+   `lib/research/search.ts`) and `r.jina.ai` (content fetching, `lib/research/fetch/web.ts`) —
+   they draw from one shared token pool, billed per-token rather than per-request (search
+   requests are a minimum ~10,000 tokens each regardless of actual usage, per Jina's docs).
+3. No free-tier request count is published the way Google's 100/day was — watch actual usage at
+   the dashboard above once live, and revisit if it becomes a bottleneck (PLAN.md §2 already
+   named a paid tier or a second search source as the next options if so).
 
 ---
 
@@ -222,8 +228,7 @@ No `STRIPE_*` env vars are needed anywhere (local `.env.local` or Vercel) until 
    Client ID/Secret — those stay Supabase-dashboard-only; no Reddit vars exist per step d; no
    `STRIPE_*` vars exist per step h):
    - `GROQ_API_KEY`
-   - `GOOGLE_CUSTOM_SEARCH_API_KEY`
-   - `GOOGLE_CUSTOM_SEARCH_CX`
+   - `JINA_API_KEY`
    - `DATABASE_URL`
    - `DIRECT_URL`
    - `NEXT_PUBLIC_SUPABASE_URL`
