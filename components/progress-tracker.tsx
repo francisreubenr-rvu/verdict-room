@@ -9,6 +9,18 @@ const STEP_LABELS: Record<PipelineStep, string> = {
   synthesizing: "Synthesizing",
 };
 
+// Live status line shown under the pipeline steps — matters more now that a session can take a
+// while (up to 50 staggered sources for Pro, see app/api/research/route.ts's DISPATCH_STAGGER_MS)
+// than it did at the old flat 12-source cap. Distinct copy per step so a long wait still reads as
+// "working," not "stuck."
+const STEP_MESSAGES: Record<PipelineStep, string> = {
+  queued: "Lining up the research…",
+  searching: "Searching the web, Reddit threads, and YouTube reviews…",
+  fetching: "Opening every source we found…",
+  extracting: "Reading claims and checking who got paid…",
+  synthesizing: "Weighing the evidence into a verdict…",
+};
+
 interface ProgressTrackerProps {
   query: string;
   status: string;
@@ -23,6 +35,7 @@ export function ProgressTracker({
   expectedSources,
 }: ProgressTrackerProps) {
   const currentIndex = PIPELINE_STEPS.indexOf(status as PipelineStep);
+  const currentStep = PIPELINE_STEPS[currentIndex] as PipelineStep | undefined;
   const flaggedCount = sources.filter(
     (s) => s.sponsorship === "sponsored" || s.sponsorship === "affiliate"
   ).length;
@@ -89,9 +102,26 @@ export function ProgressTracker({
           })}
         </div>
 
-        <div className="mt-7 grid grid-cols-2 gap-3.5">
+        {currentStep ? (
+          <div className="mt-6 flex items-center justify-center gap-2.5 rounded-2xl bg-well px-4 py-3 text-center shadow-[var(--shadow-well)]">
+            <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-primary" />
+            <span className="font-mono text-[11px] tracking-wide text-accent-foreground">
+              {STEP_MESSAGES[currentStep]}
+            </span>
+          </div>
+        ) : null}
+
+        <div className="mt-4 grid grid-cols-2 gap-3.5">
           <div className="rounded-2xl bg-well px-4 py-3.5 text-center shadow-[var(--shadow-well)]">
-            <div className="font-serif text-2xl font-extrabold">{sources.length}</div>
+            <div className="font-serif text-2xl font-extrabold">
+              {sources.length}
+              {expectedSources > 0 ? (
+                <span className="text-base font-semibold text-muted-foreground">
+                  {" "}
+                  / {expectedSources}
+                </span>
+              ) : null}
+            </div>
             <div className="font-mono text-[9.5px] tracking-wide text-muted-foreground">
               SOURCES FOUND
             </div>

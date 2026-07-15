@@ -13,13 +13,13 @@ export const metadata: Metadata = {
 };
 
 const FREE_FEATURES = [
-  { included: true, text: "3 research reports a month" },
-  { included: true, text: "Up to 12 sources read per query" },
+  { included: true, text: "10 research reports a month" },
+  { included: true, text: "Up to 15 sources read per query" },
   { included: true, text: "Every paid voice labeled, with confidence" },
   { included: true, text: "Full source list on every report" },
 ];
 
-const PRO_FEATURES = ["Unlimited reports"];
+const PRO_FEATURES = ["Unlimited reports", "Up to 50 sources read per query"];
 
 const FAQS = [
   {

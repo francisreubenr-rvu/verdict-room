@@ -57,7 +57,8 @@ export type FailureReason =
   | "no_results"
   | "all_sources_failed"
   | "synthesis_failed"
-  | "timed_out";
+  | "timed_out"
+  | "quota_exceeded";
 
 export const FAILURE_MESSAGES: Record<FailureReason, string> = {
   query_parse_failed: "Couldn't understand that query. Try rephrasing it.",
@@ -66,6 +67,7 @@ export const FAILURE_MESSAGES: Record<FailureReason, string> = {
   all_sources_failed: "Every source we found failed to load. Please try again.",
   synthesis_failed: "We gathered sources but couldn't finish the report. Please try again.",
   timed_out: "This is taking too long. Please try again.",
+  quota_exceeded: "You're out of free reports this month. Upgrade to Pro for unlimited reports.",
 };
 
 // A session stuck in a non-terminal status this long almost certainly lost a `waitUntil` hop

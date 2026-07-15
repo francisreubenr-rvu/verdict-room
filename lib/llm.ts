@@ -27,7 +27,8 @@ function getGroq(): OpenAI {
 // openai/gpt-oss-120b — Groq's own recommended replacement for the now-deprecated
 // llama-3.3-70b-versatile, with native tool-use/function-calling support. Free tier is rate-limited
 // (30 req/min, 1K req/day, 8K tokens/min, 200K tokens/day as of this writing) — worth knowing if
-// extract+classify calls (one per source, up to 12/session) start getting throttled.
+// extract+classify calls (one per source, up to 15/50 per session — see lib/billing.ts's
+// FREE_SOURCE_CAP/PRO_SOURCE_CAP) start getting throttled.
 const MODEL = "openai/gpt-oss-120b";
 
 export type ParsedQuery = {
@@ -158,13 +159,15 @@ export async function generateSearchQueries(
     "generateSearchQueries"
   );
   // The 3-5 item bound is a schema *hint*, not an enforced constraint — a model that ignores it
-  // fires one Google Custom Search call per extra query, eating into the shared 100/day quota.
+  // fires one extra Jina Search call per extra query, eating into the shared Jina token pool.
   return { queries: input.queries.slice(0, 5), parsed: input.parsed };
 }
 
-// All 12 process-source calls for a session fire concurrently, well within reach of Groq's free
-// tier's 30 req/min or 8K tokens/min ceiling — a single bounded retry after a short backoff lets
-// a 429 clear instead of permanently failing that source (there is no retry anywhere else in the
+// Up to 50 process-source calls for a Pro session (staggered ~1.2s apart, see
+// DISPATCH_STAGGER_MS in app/api/research/route.ts — not truly concurrent, but still well within
+// reach of Groq's free tier's 30 req/min or 8K tokens/min ceiling given enough sources) — a
+// single bounded retry after a short backoff lets a 429 clear instead of permanently failing
+// that source (there is no retry anywhere else in the
 // pipeline, so today one rate-limited call = one lost source, silently).
 async function withRateLimitRetry<T>(fn: () => Promise<T>): Promise<T> {
   try {

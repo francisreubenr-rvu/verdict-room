@@ -46,10 +46,10 @@ const STAGES = [
   {
     n: 3,
     label: "FETCHING",
-    copy: "We open up to 12 tabs so you don't have to. Transcripts pulled, threads unrolled, paywalled fluff skipped. Every document gets a receipt: who wrote it, when, where.",
+    copy: "We open up to 50 tabs so you don't have to — searched across the web, Reddit threads, and YouTube reviews, not just one search engine. Transcripts pulled, threads unrolled, paywalled fluff skipped. Every document gets a receipt: who wrote it, when, where.",
     detail: (
       <div className="rounded-2xl bg-well px-5 py-3 text-center shadow-[var(--shadow-well)]">
-        <div className="font-serif text-3xl font-extrabold">12</div>
+        <div className="font-serif text-3xl font-extrabold">50</div>
         <div className="font-mono text-[9.5px] tracking-wide text-muted-foreground">
           TABS, OPENED FOR YOU, MAX
         </div>

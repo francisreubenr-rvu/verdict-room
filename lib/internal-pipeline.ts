@@ -64,14 +64,29 @@ export function internalUrl(path: string, request: Request): URL {
 // non-ok response or thrown error so a future regression shows up in `get_runtime_errors` instead
 // of requiring another live investigation. Returns the fetch promise so the caller can still pass
 // it to waitUntil() to extend the invocation's lifetime.
-export function dispatchInternal(url: URL, init: RequestInit, context: string): Promise<void> {
-  return fetch(url, init)
-    .then((response) => {
-      if (!response.ok) {
-        console.error(`${context}: internal dispatch to ${url} returned ${response.status}`);
-      }
-    })
-    .catch((err) => {
-      console.error(`${context}: internal dispatch to ${url} threw`, err);
-    });
+//
+// delayMs (added 2026-07-15, tiered source caps): optionally waits before firing the fetch. Used
+// to stagger the process-source dispatch loop when a session has many sources (up to 50 for Pro)
+// — firing them all at once would burst well past Groq's free-tier req/min ceiling. Safe to do
+// here because every call site is already inside a waitUntil-tracked tail that runs after the
+// client-facing response was sent, so the delay costs nothing in perceived latency.
+export function dispatchInternal(
+  url: URL,
+  init: RequestInit,
+  context: string,
+  delayMs = 0
+): Promise<void> {
+  const run = () =>
+    fetch(url, init)
+      .then((response) => {
+        if (!response.ok) {
+          console.error(`${context}: internal dispatch to ${url} returned ${response.status}`);
+        }
+      })
+      .catch((err) => {
+        console.error(`${context}: internal dispatch to ${url} threw`, err);
+      });
+
+  if (delayMs <= 0) return run();
+  return new Promise<void>((resolve) => setTimeout(resolve, delayMs)).then(run);
 }

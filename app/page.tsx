@@ -5,7 +5,7 @@ import { HeroDemo } from "@/components/hero-demo";
 import { MarketingFooter } from "@/components/footer";
 
 const PROOF_STATS = [
-  { value: "12", label: "SOURCES PER QUERY, MAX" },
+  { value: "50", label: "SOURCES PER QUERY, PRO" },
   { value: "3", label: "PLATFORMS SEARCHED" },
   { value: "0", label: "AFFILIATE LINKS, EVER" },
 ];
@@ -34,7 +34,7 @@ const PROBLEM_CARDS = [
 const PIPELINE_STEPS = [
   { n: 1, label: "QUEUED", copy: "Accepts the mission. Stretches." },
   { n: 2, label: "SEARCHING", copy: "Casts a wide net across YouTube, Reddit, the open web." },
-  { n: 3, label: "FETCHING", copy: "Opens up to 12 tabs so you don't have to." },
+  { n: 3, label: "FETCHING", copy: "Opens up to 50 tabs so you don't have to." },
   { n: 4, label: "EXTRACTING", copy: "Finds the sentences that matter. Flags the paid ones." },
   { n: 5, label: "SYNTHESIZING", copy: "Argues with itself until one verdict wins." },
 ];
@@ -71,7 +71,7 @@ export default function LandingPage() {
               </Link>
             </div>
             <div className="mt-3.5 font-mono text-[11.5px] tracking-wide text-muted-foreground">
-              3 free reports a month · no card · no affiliate kickbacks, ever
+              10 free reports a month · no card · no affiliate kickbacks, ever
             </div>
           </div>
 

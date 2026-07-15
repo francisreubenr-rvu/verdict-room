@@ -2,20 +2,32 @@ import { prisma } from "@/lib/db";
 
 // SITE-REDESIGN-PLAN.md §Stage C: billing + quota only. Free plan is capped at
 // this many ResearchSessions per calendar month; Pro is unlimited.
-export const FREE_MONTHLY_REPORT_LIMIT = 3;
+// Raised 2026-07-15 from 3 to 10 (user request).
+export const FREE_MONTHLY_REPORT_LIMIT = 10;
+
+// Source cap per session — best-effort ceiling, not a guarantee (search may surface fewer
+// unique candidates than the cap). Raised 2026-07-15 from a flat 12 to a tiered cap (user
+// request). See app/api/research/route.ts for where this is applied.
+export const FREE_SOURCE_CAP = 15;
+export const PRO_SOURCE_CAP = 50;
 
 export type Plan = "free" | "pro";
 
-// No Subscription row, or a row whose status isn't active, means free — a
-// canceled/past-due subscriber falls back to free rather than being locked
-// out entirely.
+export function sourceCapForPlan(plan: Plan): number {
+  return plan === "pro" ? PRO_SOURCE_CAP : FREE_SOURCE_CAP;
+}
+
+// No Subscription row means free. A row's status "active" is a real Stripe subscription;
+// "comped" is a manually-granted pro account (Stripe billing is skipped for this deployment,
+// see DEPLOY.md §h) — both count as pro. Anything else (canceled/past_due/etc.) falls back to
+// free rather than locking the account out entirely.
 export async function getPlanForUser(userId: string): Promise<Plan> {
   const subscription = await prisma.subscription.findUnique({
     where: { userId },
     select: { plan: true, status: true },
   });
 
-  if (subscription?.plan === "pro" && subscription.status === "active") {
+  if (subscription?.plan === "pro" && (subscription.status === "active" || subscription.status === "comped")) {
     return "pro";
   }
   return "free";

@@ -210,6 +210,16 @@ all still exist in the codebase, dormant and harmless, for whenever a payment pr
 supports Indian merchants is wired in (Razorpay, Lemon Squeezy, and Paddle all do — none of these
 have been evaluated yet, this is just naming the option space, not a recommendation).
 
+**Manual pro grants ("comped" accounts):** with checkout not live, `lib/billing.ts`'s
+`getPlanForUser` treats `Subscription.status === "comped"` the same as a real Stripe `"active"`
+subscription. To grant an account pro access by hand: find their Supabase auth user id
+(`select id from auth.users where email = '...'`, via a Prisma raw query — `DATABASE_URL`
+connects with access to the `auth` schema too, not just `public`), then upsert a `Subscription`
+row with `plan: "pro"`, `status: "comped"`, and a placeholder `stripeCustomerId` (e.g.
+`comp_<userId>` — the column is required + unique but there's no real Stripe customer to
+reference; using a non-`cus_`-prefixed value avoids ever colliding with a real one later). First
+used 2026-07-15 to grant `francisreubenrbtech25@rvu.edu.in` pro access on request.
+
 No `STRIPE_*` env vars are needed anywhere (local `.env.local` or Vercel) until this is revisited.
 
 ---

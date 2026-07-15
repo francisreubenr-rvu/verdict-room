@@ -46,7 +46,7 @@ model Subscription {
   plan                 Plan     @default(free)
   stripeCustomerId     String   @unique
   stripeSubscriptionId String?
-  status               String? // Stripe subscription status: active|past_due|canceled|...
+  status               String? // Stripe subscription status: active|past_due|canceled|... — or "comped" for a manual pro grant with no real Stripe subscription (see DEPLOY.md §h)
   currentPeriodEnd     DateTime?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt

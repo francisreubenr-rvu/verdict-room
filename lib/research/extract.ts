@@ -27,10 +27,11 @@ function detectPlatform(url: string): Platform {
   return "web";
 }
 
-// Groq's free tier is 8K tokens/min shared across all 12 concurrent process-source calls a
-// session fires — a long review page's full Jina markdown or YouTube transcript can run
-// 50-100K characters and single-handedly blow that budget. ~24K chars (~6K tokens) leaves
-// headroom for the prompt scaffolding and the model's own output within the per-call budget.
+// Groq's free tier is 8K tokens/min shared across every process-source call a session fires (up
+// to 50 for Pro, staggered but still landing within the same rate window) — a long review page's
+// full Jina markdown or YouTube transcript can run 50-100K characters and single-handedly blow
+// that budget. ~24K chars (~6K tokens) leaves headroom for the prompt scaffolding and the
+// model's own output within the per-call budget.
 const MAX_CONTENT_CHARS = 24_000;
 
 export async function processSource(url: string): Promise<{

@@ -98,10 +98,21 @@ shared risk with any hosting choice, not something either fetch method eliminate
   registered Reddit account + script app, which hit real signup friction during deployment. The
   public JSON endpoints return the same post+comments payload, no auth needed — trade-off is
   stricter/undocumented unauthenticated rate limits vs. the OAuth tier, accepted given this
-  project's low request volume (a handful of Reddit URLs per session). Revisit if Reddit starts
-  throttling/blocking these requests at scale.
-- **Search discovery** — Jina Search (`s.jina.ai`), called directly with `fetch`. **Changed
-  2026-07-15** from Google Custom Search API — see §2.
+  project's low request volume (a handful of Reddit URLs per session). **Status update
+  2026-07-15**: live-tested and this endpoint now returns a flat 403 for unauthenticated
+  requests, including against a real current permalink (not just a guessed/nonexistent one) —
+  Reddit appears to have broadened its anti-bot blocking since this was built, beyond just rate
+  limiting. Unverified whether Vercel's specific outbound IP ranges are also blocked (only tested
+  from a dev shell), but the pipeline already degrades gracefully either way (a failed fetch just
+  excludes that source, see `all_sources_failed`). Revisit with Reddit's real OAuth API if this
+  becomes a recurring gap — that was the original PLAN.md spec, dropped for signup friction, and
+  is still the honest fix if unauthenticated access stays blocked.
+- **Search discovery** — two independent routes, merged (**changed 2026-07-15**, user request:
+  "don't rely on a single source finder"): Jina Search (`s.jina.ai`, primary, replaced Google
+  Custom Search API — see §2) plus a direct YouTube search-results scrape (same
+  unauthenticated-fetch + embedded-JSON-parse technique as the YouTube transcript fetch above).
+  A direct Reddit search route was evaluated and dropped for the same 403-blocking reason as
+  Reddit content fetching above. See `lib/research/search.ts`'s `discoverSources`.
 
 ## 3. Research Pipeline (the core)
 
@@ -112,24 +123,31 @@ the whole thing, each step is its own short-lived API route, chained together, w
 
 1. **Search** — one LLM call to generate 3-5 targeted queries from the input (product, "best X
    review", "X reddit", "X problems/complaints", "X sponsored review"), then dispatch each to
-   Jina Search (§2) in parallel to get candidate URLs. Runs inline in the
-   `POST /api/research` handler (fast — one LLM call + a few parallel HTTP calls, well within a
-   single function's time budget) and writes the source URL list to `ResearchSession` before
-   returning the session id.
+   Jina Search (§2) in parallel, plus one direct YouTube search-results scrape (§2) — two
+   independent discovery routes merged and deduped, not one (**changed 2026-07-15**, user
+   request: "don't rely on a single source finder"; see `lib/research/search.ts`'s
+   `discoverSources`). **Changed 2026-07-15**: no longer runs inline in `POST /api/research` —
+   the session is created immediately (`status: "queued"`) and the search step runs as a
+   detached `waitUntil` tail (`continueSearch` in `app/api/research/route.ts`), so the client
+   gets a session id and can render real "queued"/"searching" progress right away instead of
+   waiting several seconds for the LLM parse + search calls to finish synchronously.
 2. **Fetch + extract + classify — one function invocation per source, run concurrently.** Each of
-   up to 12 candidate URLs is processed by its own call to `POST /api/research/[id]/process-source`
-   (fetch content via the appropriate method above, run the merged extract+classify LLM call,
-   write the resulting `Source`/`Finding` rows). Because each invocation only does one fetch + one
-   LLM call, it comfortably fits inside a single Vercel function's execution window — the earlier
-   timeout concern was about running *all 12 sequentially in one function*, not about the work
-   itself. The initial `POST /api/research` handler fires all 12 calls via `waitUntil` (from
-   `@vercel/functions`) so they run to completion after the initial response is sent, without the
-   client waiting on them synchronously. Before fetching a URL, check for an existing `Source` row
-   with that URL and `updatedAt` within 30 days — on a hit, skip the fetch and the LLM call
-   entirely and just link the cached `Source` into this session (§4). Cross-session, cross-*user*
-   caching is now real (Supabase is shared, unlike per-browser SQLite would have been) — this is
-   a genuine win from moving to a real backend.
-3. **Synthesize** — triggered once all 12 `process-source` calls for a session have completed
+   up to `FREE_SOURCE_CAP`/`PRO_SOURCE_CAP` (15/50, §3 table) candidate URLs is processed by its
+   own call to `POST /api/research/[id]/process-source` (fetch content via the appropriate method
+   above, run the merged extract+classify LLM call, write the resulting `Source`/`Finding` rows).
+   Because each invocation only does one fetch + one LLM call, it comfortably fits inside a
+   single Vercel function's execution window — the earlier timeout concern was about running
+   *all sources sequentially in one function*, not about the work itself. The `continueSearch`
+   tail (see step 1) fires all calls via `waitUntil` (from `@vercel/functions`) so they run to
+   completion after the client-facing response was already sent — staggered ~1.2s apart
+   (`DISPATCH_STAGGER_MS`) to avoid bursting past Groq's rate limits at the higher Pro count,
+   which costs nothing in perceived latency since this all happens after the response, not before
+   it. Before fetching a URL, check for an existing `Source` row with that URL and `updatedAt`
+   within 30 days — on a hit, skip the fetch and the LLM call entirely and just link the cached
+   `Source` into this session (§4). Cross-session, cross-*user* caching is now real (Supabase is
+   shared, unlike per-browser SQLite would have been) — this is a genuine win from moving to a
+   real backend.
+3. **Synthesize** — triggered once all `process-source` calls for a session have completed
    (each one checks, after writing its own result, whether it was the last one outstanding for
    that session — a simple `count(*)` against `SessionSource` vs. the expected total — and if so,
    calls `POST /api/research/[id]/synthesize` itself). One LLM call: reads all `Finding`s across
@@ -143,8 +161,8 @@ the whole thing, each step is its own short-lived API route, chained together, w
 | Question | Decision |
 |---|---|
 | LLM provider/model | Groq (`openai/gpt-oss-120b`) for extract+classify and synthesis — changed 2026-07-15, Claude Sonnet -> DeepSeek -> Groq same day, see §8. Chosen for free-tier API access. |
-| Source cap | 12 sources/session — chosen for cost, not execution time (each source is its own bounded function call now, so the old "does it fit in one timeout" driver no longer applies, but the cost ceiling below still does). |
-| Per-session cost ceiling | Was ~$0.50 soft budget under Claude Sonnet (≈13 calls: up to 12 extract+classify + 1 synthesis; search-query generation is one more LLM call, already counted in the search step). Groq's free tier for `openai/gpt-oss-120b` is 30 req/min, 1K req/day, 8K tokens/min, 200K tokens/day (as of 2026-07-15) rather than a dollar cost — the real constraint is now rate limits, not spend. 8K tokens/min is worth watching: extract+classify sends full source content per call and could approach that ceiling on longer sources. |
+| Source cap | **Changed 2026-07-15** (user request): tiered by plan instead of a flat 12 — 15/session free, 50/session Pro (`lib/billing.ts` `FREE_SOURCE_CAP`/`PRO_SOURCE_CAP`). Process-source dispatch is staggered ~1.2s apart (`DISPATCH_STAGGER_MS` in `app/api/research/route.ts`) to avoid bursting past Groq's free-tier req/min ceiling at the higher Pro count — the stagger runs entirely inside the post-response `waitUntil` tail, so it costs nothing in client-perceived latency. |
+| Per-session cost ceiling | Groq's free tier for `openai/gpt-oss-120b` is 30 req/min, 1K req/day, 8K tokens/min, **200K tokens/day** (as of 2026-07-15). A single 50-source Pro session alone can approach or exceed the 200K/day figure (50 extract+classify calls × up to ~6-8K tokens each, content is capped at ~24K chars per call) — the pipeline degrades gracefully (a rate-limited source just fails and is excluded, not a session-wide crash, see `all_sources_failed`), but this is a real ceiling worth watching now that the cap is much higher than the original 12. |
 | Auto-exclude sponsored content? | No — label and show separately. |
 | Search source | Jina Search (`s.jina.ai`) — changed 2026-07-15 from Google Custom Search API, see §2. |
 
@@ -343,14 +361,17 @@ didn't reopen that scope decision.)
   `openai/gpt-oss-120b` is Groq's own recommended replacement for the now-deprecated
   `llama-3.3-70b-versatile` and has native tool-use support, which every call in `lib/llm.ts`
   depends on for a guaranteed response shape.
-- **Source cap:** 12 sources/session — see §3 table.
+- **Source cap:** tiered by plan, 15/session free · 50/session Pro — changed 2026-07-15 from a
+  flat 12, see §3 table.
 - **Sponsored-content handling:** label + show separately, never silently auto-exclude — see §3 table.
 - **Deploy target:** Vercel — see §2 for why this is now viable (Supabase-backed chained execution).
 - **Database:** Supabase Postgres via Prisma — see §4.
 - **Identity:** Supabase Auth, Google Sign-In only in v1 (no email/password, no other providers —
   smallest surface that satisfies "we need accounts now") — see §4a.
-- **Search discovery:** Jina Search (`s.jina.ai`) — changed 2026-07-15 from Google Custom
-  Search API, see §2.
+- **Search discovery:** Jina Search (`s.jina.ai`) + direct YouTube search — changed 2026-07-15
+  from Google Custom Search API alone, see §2.
+- **Free tier limits:** raised 2026-07-15 (user request) — monthly report cap 3 → 10, source cap
+  a flat 12 → tiered 15 free / 50 Pro. See `lib/billing.ts`.
 
 ## 9. V2 Backlog (deferred, not forgotten)
 

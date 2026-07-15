@@ -93,3 +93,96 @@ export async function webSearch(query: string): Promise<SearchResult[]> {
       snippet: item.description ?? "",
     }));
 }
+
+// Second, independent discovery route (added 2026-07-15 — "don't rely on a single source
+// finder"): direct YouTube search-results scrape, same unauthenticated-fetch + embedded-JSON-
+// parse technique lib/research/fetch/youtube.ts already uses for transcripts (parses
+// ytInitialPlayerResponse there, ytInitialData here). No API key, no new vendor — YouTube results
+// are frequently under-represented in general web search rankings compared to text content, so
+// this also improves coverage, not just redundancy.
+//
+// A real Reddit search route was evaluated and dropped: both reddit.com/search.json and the
+// permalink .json pattern lib/research/fetch/reddit.ts already uses returned live 403s in
+// testing (confirmed against a real, current permalink, not a guessed one) — Reddit's
+// unauthenticated JSON access appears to be broadly blocked now, not just rate-limited. Revisit
+// if that changes; a v2 option is Reddit's real OAuth API (PLAN.md §2 originally specified this,
+// dropped for signup friction).
+const YOUTUBE_FETCH_TIMEOUT_MS = 15_000;
+
+type YoutubeVideoRenderer = {
+  videoId?: string;
+  title?: { runs?: Array<{ text?: string }> };
+  descriptionSnippet?: { runs?: Array<{ text?: string }> };
+};
+
+function extractYoutubeVideos(html: string): SearchResult[] {
+  const match = html.match(/ytInitialData\s*=\s*(\{[\s\S]*?\});/);
+  if (!match) {
+    return [];
+  }
+
+  let data: unknown;
+  try {
+    data = JSON.parse(match[1]);
+  } catch {
+    return [];
+  }
+
+  // Undocumented, scraped structure — walk it defensively since YouTube can change this without
+  // notice; any shape mismatch degrades to "zero results from this route" rather than a throw.
+  const sections =
+    (
+      data as {
+        contents?: {
+          twoColumnSearchResultsRenderer?: {
+            primaryContents?: {
+              sectionListRenderer?: { contents?: Array<{ itemSectionRenderer?: { contents?: unknown[] } }> };
+            };
+          };
+        };
+      }
+    )?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents ?? [];
+
+  const results: SearchResult[] = [];
+  for (const section of sections) {
+    const items = section?.itemSectionRenderer?.contents ?? [];
+    for (const item of items as Array<{ videoRenderer?: YoutubeVideoRenderer }>) {
+      const vr = item?.videoRenderer;
+      if (!vr?.videoId) continue;
+      const title = vr.title?.runs?.map((r) => r.text ?? "").join("") ?? "";
+      const snippet = vr.descriptionSnippet?.runs?.map((r) => r.text ?? "").join("") ?? "";
+      results.push({
+        url: `https://www.youtube.com/watch?v=${vr.videoId}`,
+        title,
+        snippet,
+      });
+    }
+  }
+  return results;
+}
+
+// Never throws — this is a supplementary discovery route, not the primary one. A failure here
+// (network error, YouTube layout change) should silently contribute zero results, not fail the
+// whole search step the way a SearchProviderError from webSearch does.
+export async function youtubeSearch(query: string): Promise<SearchResult[]> {
+  try {
+    const url = new URL("https://www.youtube.com/results");
+    url.searchParams.set("search_query", query);
+
+    const response = await fetch(url.toString(), {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      },
+      signal: AbortSignal.timeout(YOUTUBE_FETCH_TIMEOUT_MS),
+    });
+    if (!response.ok) {
+      return [];
+    }
+
+    const html = await response.text();
+    return extractYoutubeVideos(html);
+  } catch {
+    return [];
+  }
+}
