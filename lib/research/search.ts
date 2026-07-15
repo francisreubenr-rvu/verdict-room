@@ -118,13 +118,21 @@ type YoutubeVideoRenderer = {
 function extractYoutubeVideos(html: string): SearchResult[] {
   const match = html.match(/ytInitialData\s*=\s*(\{[\s\S]*?\});/);
   if (!match) {
+    // Diagnostic, not silent: this worked in local testing against the real endpoint, but
+    // Vercel's outbound IPs may get served a different response (consent/localization redirect,
+    // bot-detection page) than a dev shell does — this log is how to tell those apart from a
+    // genuine YouTube markup change without guessing.
+    console.error(
+      `youtubeSearch: no ytInitialData found in response (${html.length} chars, starts with: ${html.slice(0, 200).replace(/\s+/g, " ")})`
+    );
     return [];
   }
 
   let data: unknown;
   try {
     data = JSON.parse(match[1]);
-  } catch {
+  } catch (err) {
+    console.error(`youtubeSearch: ytInitialData matched but failed to parse as JSON`, err);
     return [];
   }
 
@@ -162,8 +170,11 @@ function extractYoutubeVideos(html: string): SearchResult[] {
 }
 
 // Never throws — this is a supplementary discovery route, not the primary one. A failure here
-// (network error, YouTube layout change) should silently contribute zero results, not fail the
-// whole search step the way a SearchProviderError from webSearch does.
+// (network error, YouTube layout change) should degrade to zero results, not fail the whole
+// search step the way a SearchProviderError from webSearch does. Failures are still logged
+// (never a silent catch) so a systemic problem — e.g. Vercel's outbound IPs getting a different
+// response than a dev shell does — shows up in get_runtime_errors instead of just looking like
+// "this route never contributes anything."
 export async function youtubeSearch(query: string): Promise<SearchResult[]> {
   try {
     const url = new URL("https://www.youtube.com/results");
@@ -177,12 +188,18 @@ export async function youtubeSearch(query: string): Promise<SearchResult[]> {
       signal: AbortSignal.timeout(YOUTUBE_FETCH_TIMEOUT_MS),
     });
     if (!response.ok) {
+      console.error(`youtubeSearch: request for "${query}" returned ${response.status}`);
       return [];
     }
 
     const html = await response.text();
-    return extractYoutubeVideos(html);
-  } catch {
+    const results = extractYoutubeVideos(html);
+    if (results.length === 0) {
+      console.error(`youtubeSearch: 0 results for "${query}" (${response.status}, ${html.length} chars)`);
+    }
+    return results;
+  } catch (err) {
+    console.error(`youtubeSearch: request for "${query}" threw`, err);
     return [];
   }
 }
