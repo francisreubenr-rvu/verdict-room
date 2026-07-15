@@ -59,6 +59,7 @@ model ResearchSession {
   parsed          Json                          // {product, useCase, budget}
   status          String   @default("queued")   // queued|searching|fetching|extracting|synthesizing|done|failed
   expectedSources Int      @default(0)          // set at end of Search step; process-source calls compare against this to detect "last one done"
+  failureReason   String?                       // set only when status="failed" — query_parse_failed|search_unavailable|no_results|all_sources_failed|synthesis_failed|timed_out — see components/research-types.ts FailureReason
   verdictJson     Json?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

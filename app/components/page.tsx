@@ -1,7 +1,15 @@
+import type { Metadata } from "next";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Reveal } from "@/components/reveal";
 import { MarketingFooter } from "@/components/footer";
+
+// Internal design-system gallery, not a product page — kept out of nav (site-header.tsx,
+// footer.tsx) and out of the crawl (robots.ts disallows /components too), noindex here as well
+// in case the URL is shared or linked externally (SE4 finding).
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+};
 
 const SWATCHES = [
   { name: "PAPER F2E8D5", className: "bg-background shadow-[var(--shadow-raised)]" },

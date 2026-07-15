@@ -11,7 +11,12 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AppFooter } from "@/components/footer";
 import { Reveal } from "@/components/reveal";
-import { isTerminalStatus, type ResearchSessionSummary } from "@/components/research-types";
+import {
+  isTerminalStatus,
+  FAILURE_MESSAGES,
+  type FailureReason,
+  type ResearchSessionSummary,
+} from "@/components/research-types";
 
 const STATUS_LABELS: Record<string, string> = {
   queued: "Queued",
@@ -82,7 +87,15 @@ function RecentSessionRow({ session }: { session: ResearchSessionSummary }) {
           {formatRelativeDate(session.createdAt)}
         </div>
       </div>
-      <Badge variant={statusBadgeVariant(session.status)} className="shrink-0">
+      <Badge
+        variant={statusBadgeVariant(session.status)}
+        className="shrink-0"
+        title={
+          session.status === "failed" && session.failureReason
+            ? FAILURE_MESSAGES[session.failureReason as FailureReason]
+            : undefined
+        }
+      >
         {STATUS_LABELS[session.status] ?? session.status}
         {!isTerminalStatus(session.status) ? "…" : ""}
       </Badge>
@@ -99,6 +112,13 @@ export default function AppQueryHome() {
   const { data, isPending: sessionsPending } = useQuery({
     queryKey: ["research-sessions"],
     queryFn: fetchRecentSessions,
+    // Keep polling while any listed session is still in progress, so a "Fetching…" badge
+    // updates on its own instead of requiring a manual reload (E6 finding).
+    refetchInterval: (query) => {
+      const sessions = query.state.data?.sessions;
+      const hasActive = sessions?.some((s) => !isTerminalStatus(s.status));
+      return hasActive ? 4000 : false;
+    },
   });
 
   async function submitQuery(q: string) {

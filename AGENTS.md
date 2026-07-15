@@ -15,7 +15,7 @@ looks wrong, flag it rather than silently diverging.
 
 ## Stack
 
-Next.js 16 (App Router) · TypeScript · Bun · Tailwind CSS 4 · shadcn/ui · Zustand · TanStack Query
+Next.js 16 (App Router) · TypeScript · Bun · Tailwind CSS 4 · shadcn/ui · TanStack Query
 · Prisma (Postgres, targeting Supabase) · Supabase Auth (Google Sign-In only) · `@vercel/functions`
 (`waitUntil` for the chained research pipeline) · Groq (`openai` SDK pointed at Groq's
 OpenAI-compatible endpoint, `openai/gpt-oss-120b`, from M2 — see PLAN.md §8 for why this replaced

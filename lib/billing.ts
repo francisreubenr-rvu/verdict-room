@@ -21,19 +21,30 @@ export async function getPlanForUser(userId: string): Promise<Plan> {
   return "free";
 }
 
-function startOfCurrentMonth(): Date {
+export function startOfCurrentMonth(): Date {
   const now = new Date();
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 }
 
-export async function countReportsThisMonth(userId: string): Promise<number> {
-  return prisma.researchSession.count({
-    where: { userId, createdAt: { gte: startOfCurrentMonth() } },
+// Accepts an optional transaction client so the POST /api/research quota re-check (which must
+// run inside the advisory-lock transaction to actually close the race, see S4) can reuse the
+// exact same counting logic instead of drifting from this definition over time.
+export async function countReportsThisMonth(
+  userId: string,
+  client: Pick<typeof prisma, "researchSession"> = prisma
+): Promise<number> {
+  // Failed sessions (search provider down, no results, every source unfetchable, synthesis
+  // error) produced nothing for the user — counting them against the monthly cap or returning
+  // them as a "duplicate" would punish the user for an infrastructure failure, not their usage.
+  return client.researchSession.count({
+    where: { userId, createdAt: { gte: startOfCurrentMonth() }, status: { not: "failed" } },
   });
 }
 
 // Pricing FAQ promise: re-running the same query within 24h doesn't cost another slot —
-// it just returns the existing session. Query match is case-insensitive/trimmed.
+// it just returns the existing session. Query match is case-insensitive/trimmed. Excludes
+// failed sessions: without this, a failed query permanently bounces the user back to the same
+// dead report for 24h with no way to actually retry (A2 finding).
 export async function findRecentDuplicateSession(userId: string, query: string) {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
   return prisma.researchSession.findFirst({
@@ -41,6 +52,7 @@ export async function findRecentDuplicateSession(userId: string, query: string) 
       userId,
       createdAt: { gte: since },
       query: { equals: query.trim(), mode: "insensitive" },
+      status: { not: "failed" },
     },
     orderBy: { createdAt: "desc" },
     select: { id: true },

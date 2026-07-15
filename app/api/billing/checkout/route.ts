@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getStripe } from "@/lib/stripe";
+import { getStripe, isStripeConfigured } from "@/lib/stripe";
 import { createClient } from "@/lib/supabase/server";
 
 // POST /api/billing/checkout — creates (or reuses) a Stripe customer for the
@@ -15,6 +15,10 @@ export async function POST(request: Request) {
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!isStripeConfigured()) {
+    return NextResponse.json({ error: "Billing is not available yet" }, { status: 503 });
   }
 
   const stripe = getStripe();

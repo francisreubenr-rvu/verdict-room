@@ -12,6 +12,8 @@ import { SourceList } from "@/components/source-list";
 import { AppFooter } from "@/components/footer";
 import {
   isTerminalStatus,
+  FAILURE_MESSAGES,
+  type FailureReason,
   type ResearchSessionResponse,
 } from "@/components/research-types";
 
@@ -81,11 +83,11 @@ export default function ResearchSessionPage() {
   }
 
   if (data.status === "failed") {
+    const message =
+      FAILURE_MESSAGES[data.failureReason as FailureReason] ??
+      "Research failed, try again.";
     return (
-      <CenteredMessage
-        message="Research failed, try again."
-        linkLabel="Start a new search"
-      />
+      <CenteredMessage message={message} linkLabel="Start a new search" />
     );
   }
 

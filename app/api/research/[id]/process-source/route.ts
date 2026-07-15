@@ -3,6 +3,7 @@ import { waitUntil } from "@vercel/functions";
 import { prisma } from "@/lib/db";
 import { processSource } from "@/lib/research/extract";
 import { isTerminalStatus, TERMINAL_STATUSES } from "@/components/research-types";
+import { assertInternalCaller, internalHeaders, internalUrl } from "@/lib/internal-pipeline";
 
 // PLAN.md §3 step 2: fetch + extract + classify one source, then check whether this was the
 // last outstanding source for the session and — if so — kick off synthesize.
@@ -12,6 +13,12 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // This is an internal pipeline hop, never a public endpoint — without this check, anyone
+  // holding (or guessing) a session id could inject arbitrary sources into it, burn the Groq/
+  // Google quota unboundedly, or force a re-synthesize. See the security review's S1 finding.
+  const authError = assertInternalCaller(request);
+  if (authError) return authError;
+
   const { id: sessionId } = await params;
 
   const body = await request.json().catch(() => null);
@@ -20,12 +27,34 @@ export async function POST(
     return NextResponse.json({ error: "url is required" }, { status: 400 });
   }
 
-  const session = await prisma.researchSession.findUnique({ where: { id: sessionId } });
+  // Only http(s) may be fetched/stored — a non-http URL (file:, javascript:, etc.) would still
+  // get persisted to Source.url and rendered as a raw <a href> in the source list (S3 finding).
+  try {
+    const scheme = new URL(url).protocol;
+    if (scheme !== "http:" && scheme !== "https:") {
+      return NextResponse.json({ error: "unsupported URL scheme" }, { status: 400 });
+    }
+  } catch {
+    return NextResponse.json({ error: "invalid url" }, { status: 400 });
+  }
+
+  // Independent lookups — run together rather than two sequential round-trips (E3 finding). The
+  // source lookup is occasionally wasted on the rare terminal-status early-return path below,
+  // a fine trade for cutting a round-trip off the common (non-terminal) path.
+  const [session, existing] = await Promise.all([
+    prisma.researchSession.findUnique({ where: { id: sessionId } }),
+    prisma.source.findUnique({ where: { url } }),
+  ]);
   if (!session) {
     return NextResponse.json({ error: "session not found" }, { status: 404 });
   }
 
-  const existing = await prisma.source.findUnique({ where: { url } });
+  // Stray/duplicate invocation arriving after the session already reached a terminal status —
+  // nothing useful to do (mirrors the same guard used for the completion check below).
+  if (isTerminalStatus(session.status)) {
+    return NextResponse.json({ ok: true });
+  }
+
   const isFresh = existing
     ? Date.now() - existing.updatedAt.getTime() < FRESHNESS_WINDOW_MS
     : false;
@@ -135,7 +164,7 @@ export async function POST(
       // Every dispatched URL failed to fetch — nothing to synthesize from.
       await prisma.researchSession.updateMany({
         where: { id: sessionId, status: { notIn: TERMINAL_STATUSES } },
-        data: { status: "failed" },
+        data: { status: "failed", failureReason: "all_sources_failed" },
       });
     } else {
       // Race guard: multiple concurrent process-source calls can each observe "count reached
@@ -148,8 +177,8 @@ export async function POST(
       });
 
       if (flipped.count > 0) {
-        const target = new URL(`/api/research/${sessionId}/synthesize`, request.url);
-        waitUntil(fetch(target, { method: "POST" }));
+        const target = internalUrl(`/api/research/${sessionId}/synthesize`, request);
+        waitUntil(fetch(target, { method: "POST", headers: internalHeaders() }));
       }
     }
   }

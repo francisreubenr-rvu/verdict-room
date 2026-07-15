@@ -157,7 +157,24 @@ export async function generateSearchQueries(
     toolName,
     "generateSearchQueries"
   );
-  return { queries: input.queries, parsed: input.parsed };
+  // The 3-5 item bound is a schema *hint*, not an enforced constraint — a model that ignores it
+  // fires one Google Custom Search call per extra query, eating into the shared 100/day quota.
+  return { queries: input.queries.slice(0, 5), parsed: input.parsed };
+}
+
+// All 12 process-source calls for a session fire concurrently, well within reach of Groq's free
+// tier's 30 req/min or 8K tokens/min ceiling — a single bounded retry after a short backoff lets
+// a 429 clear instead of permanently failing that source (there is no retry anywhere else in the
+// pipeline, so today one rate-limited call = one lost source, silently).
+async function withRateLimitRetry<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    const status = (err as { status?: number } | null)?.status;
+    if (status !== 429) throw err;
+    await new Promise((resolve) => setTimeout(resolve, 1500 + Math.random() * 1000));
+    return fn();
+  }
 }
 
 /**
@@ -178,7 +195,7 @@ export async function extractAndClassify(input: {
 }> {
   const toolName = "emit_extraction";
 
-  const response = await getGroq().chat.completions.create({
+  const requestOptions: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming = {
     model: MODEL,
     max_tokens: 4096,
     tools: [
@@ -249,7 +266,9 @@ export async function extractAndClassify(input: {
         content: `Source URL: ${input.url}\nPlatform: ${input.platform}\n\nContent:\n${input.content}\n\nExtract findings and classify sponsorship per the tool schema.`,
       },
     ],
-  });
+  };
+
+  const response = await withRateLimitRetry(() => getGroq().chat.completions.create(requestOptions));
 
   const parsed = parseForcedToolCall<{
     findings: Finding[];
@@ -265,7 +284,12 @@ export async function extractAndClassify(input: {
     assertSentiment(finding.sentiment, "extractAndClassify finding");
   }
 
-  return parsed;
+  return {
+    ...parsed,
+    // The schema asks for 0-1 but doesn't enforce it — an out-of-range value would render as
+    // e.g. "700%" confidence in the UI (source-list.tsx).
+    sponsorConfidence: Math.min(1, Math.max(0, parsed.sponsorConfidence)),
+  };
 }
 
 export type SynthesisFinding = {

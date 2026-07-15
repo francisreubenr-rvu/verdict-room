@@ -5,9 +5,8 @@ import { HeroDemo } from "@/components/hero-demo";
 import { MarketingFooter } from "@/components/footer";
 
 const PROOF_STATS = [
-  { value: "61", label: "SOURCES PER QUERY" },
-  { value: "4 min", label: "TO A VERDICT" },
-  { value: "14", label: "SHILLS FLAGGED / REPORT" },
+  { value: "12", label: "SOURCES PER QUERY, MAX" },
+  { value: "3", label: "PLATFORMS SEARCHED" },
   { value: "0", label: "AFFILIATE LINKS, EVER" },
 ];
 
@@ -35,7 +34,7 @@ const PROBLEM_CARDS = [
 const PIPELINE_STEPS = [
   { n: 1, label: "QUEUED", copy: "Accepts the mission. Stretches." },
   { n: 2, label: "SEARCHING", copy: "Casts a wide net across YouTube, Reddit, the open web." },
-  { n: 3, label: "FETCHING", copy: "Opens the 61 tabs so you don't have to." },
+  { n: 3, label: "FETCHING", copy: "Opens up to 12 tabs so you don't have to." },
   { n: 4, label: "EXTRACTING", copy: "Finds the sentences that matter. Flags the paid ones." },
   { n: 5, label: "SYNTHESIZING", copy: "Argues with itself until one verdict wins." },
 ];
@@ -82,7 +81,7 @@ export default function LandingPage() {
         {/* PROOF STRIP */}
         <Reveal>
           <div className="mx-auto max-w-[1128px] px-4 pb-16 sm:px-6">
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               {PROOF_STATS.map((s) => (
                 <div
                   key={s.label}

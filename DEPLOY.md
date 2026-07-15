@@ -129,11 +129,23 @@ value in `.env.local` is real. After this succeeds, restart `bun dev` if it was 
 ## g. Row-Level Security (manual — not yet defined anywhere in this repo)
 
 **Checked:** no `.sql` file, Prisma migration, or setup script in this repo defines RLS policies —
-`prisma/schema.prisma` and `prisma db push` do not create them (Prisma has no RLS DSL). The
-application code already assumes RLS is the real enforcement layer (see the comments in
-`app/api/research/route.ts` and `app/api/research/[id]/route.ts` — the `userId` filters there are
-called out as "defense in depth only"). **This SQL must be run by hand in the Supabase dashboard's
-SQL Editor after `db push` has created the tables:**
+`prisma/schema.prisma` and `prisma db push` do not create them (Prisma has no RLS DSL). **This SQL
+must be run by hand in the Supabase dashboard's SQL Editor after `db push` has created the
+tables:**
+
+**Corrected 2026-07-15 (post-launch security review):** this section used to say the app-layer
+`userId` filters in `app/api/research/route.ts`/`[id]/route.ts` were "defense in depth only"
+because RLS was "the real enforcement." That was verified false against the live database:
+`DATABASE_URL`'s pooled connection authenticates as the `postgres` role, which owns these tables
+and therefore bypasses RLS by default (confirmed via `select rolbypassrls from pg_roles where
+rolname = current_user` — returns `true`). Separately, `auth.uid()` — the function every policy
+below keys off — only resolves from a JWT claim that PostgREST sets; a raw Prisma connection never
+sets it, so it reads `NULL` on every query Prisma runs, which would deny all access if RLS somehow
+weren't bypassed. **The RLS policies below are still worth applying** (a real second layer if
+`DATABASE_URL` is ever swapped to a non-owner role, and correct protection for any future
+client-side Supabase query against these tables), but do not treat them as active protection today
+— the app-layer `userId`/`auth.getUser()` checks in every route are the only enforcement that
+currently exists, so never remove one of those checks on the assumption RLS has it covered.
 
 ```sql
 alter table "ResearchSession" enable row level security;
@@ -178,9 +190,7 @@ like `ResearchSession`/`Option`, so it gets the same policy shape rather than be
 without RLS.
 
 `Source`, `Finding`, and `SessionSource` intentionally stay **without** RLS (PLAN.md §4a: the cache
-is shared content, writable only via the service-role key from server-side API routes). Verify
-`DATABASE_URL` in `.env.local`/Vercel uses the standard `postgres` role (not `service_role`) so RLS
-actually applies to app traffic on `ResearchSession`/`Option`.
+is shared content, writable only via the service-role key from server-side API routes).
 
 ---
 
@@ -218,6 +228,8 @@ No `STRIPE_*` env vars are needed anywhere (local `.env.local` or Vercel) until 
    - `DIRECT_URL`
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `INTERNAL_PIPELINE_SECRET` (added 2026-07-15 — generate with `openssl rand -hex 32`; required
+     in production or `process-source`/`synthesize` hard-fail with 500, see `.env.local.example`)
    Apply each to Production (and Preview/Development if you want preview deploys to work too).
 5. In Google Cloud Console (step b), add the production Vercel domain's callback flow: Supabase
    Auth already handles the OAuth redirect via its own callback URL (already authorized in step

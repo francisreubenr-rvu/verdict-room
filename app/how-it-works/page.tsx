@@ -1,7 +1,15 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
 import { Reveal } from "@/components/reveal";
 import { MarketingFooter } from "@/components/footer";
+
+export const metadata: Metadata = {
+  title: "How it works",
+  description:
+    "Search, fetch, extract, and synthesize — how The Verdict Room turns a question into a sourced verdict.",
+  alternates: { canonical: "/how-it-works" },
+};
 
 const STAGES = [
   {
@@ -38,12 +46,12 @@ const STAGES = [
   {
     n: 3,
     label: "FETCHING",
-    copy: "We open the 61 tabs so you don't have to. Transcripts pulled, threads unrolled, paywalled fluff skipped. Every document gets a receipt: who wrote it, when, where.",
+    copy: "We open up to 12 tabs so you don't have to. Transcripts pulled, threads unrolled, paywalled fluff skipped. Every document gets a receipt: who wrote it, when, where.",
     detail: (
       <div className="rounded-2xl bg-well px-5 py-3 text-center shadow-[var(--shadow-well)]">
-        <div className="font-serif text-3xl font-extrabold">61</div>
+        <div className="font-serif text-3xl font-extrabold">12</div>
         <div className="font-mono text-[9.5px] tracking-wide text-muted-foreground">
-          TABS, OPENED FOR YOU
+          TABS, OPENED FOR YOU, MAX
         </div>
       </div>
     ),
@@ -76,7 +84,7 @@ const STAGES = [
           VERDICT
         </div>
         <div className="mt-1 font-serif text-sm text-ink-foreground">
-          One answer. 61 receipts.
+          One answer. Every receipt linked.
         </div>
       </div>
     ),

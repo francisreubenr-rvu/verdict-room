@@ -8,7 +8,7 @@ const FOOTER_LINKS = {
   ],
   company: [
     { href: "/about", label: "About" },
-    { href: "/components", label: "Design system" },
+    { href: "/privacy", label: "Privacy" },
     { href: "/login", label: "Sign in" },
   ],
 } as const;
@@ -16,7 +16,7 @@ const FOOTER_LINKS = {
 // Full 4-column footer for marketing pages, per the design's "isMarketing" split.
 export function MarketingFooter() {
   return (
-    <div className="mx-auto mb-8 w-[calc(100%-24px)] max-w-[1128px] sm:w-[calc(100%-48px)]">
+    <footer className="mx-auto mb-8 w-[calc(100%-24px)] max-w-[1128px] sm:w-[calc(100%-48px)]">
       <div className="rounded-[28px] bg-card px-6 py-8 shadow-[var(--shadow-raised-lg)] sm:px-11 sm:pt-10 sm:pb-7">
         <div className="grid grid-cols-2 gap-7 sm:grid-cols-[1.4fr_1fr_1fr_1fr]">
           <div className="col-span-2 sm:col-span-1">
@@ -78,20 +78,20 @@ export function MarketingFooter() {
           </span>
         </div>
       </div>
-    </div>
+    </footer>
   );
 }
 
 // Compact one-line footer for app screens, per the design's "isAppFoot" split.
 export function AppFooter() {
   return (
-    <div className="mx-auto mb-6 flex w-[calc(100%-24px)] max-w-[1128px] flex-wrap justify-between gap-3 sm:w-[calc(100%-48px)]">
+    <footer className="mx-auto mb-6 flex w-[calc(100%-24px)] max-w-[1128px] flex-wrap justify-between gap-3 sm:w-[calc(100%-48px)]">
       <span className="font-mono text-[10.5px] text-muted-foreground">
         © 2026 THE VERDICT ROOM
       </span>
       <span className="font-mono text-[10.5px] text-muted-foreground">
         SPONSORED ≠ ORGANIC · WEIGH ACCORDINGLY
       </span>
-    </div>
+    </footer>
   );
 }

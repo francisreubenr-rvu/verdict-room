@@ -12,7 +12,6 @@ const NAV_LINKS = [
   { href: "/how-it-works", label: "How it works" },
   { href: "/pricing", label: "Pricing" },
   { href: "/about", label: "About" },
-  { href: "/components", label: "Components" },
 ] as const;
 
 // Floating pill nav, persistent across every route (marketing + app) per the
@@ -56,7 +55,7 @@ export function SiteHeader() {
   }
 
   return (
-    <div className="sticky top-3.5 z-50 mx-auto w-[calc(100%-24px)] max-w-[1128px] px-0 sm:top-4 sm:w-[calc(100%-48px)]">
+    <header className="sticky top-3.5 z-50 mx-auto w-[calc(100%-24px)] max-w-[1128px] px-0 sm:top-4 sm:w-[calc(100%-48px)]">
       <div className="flex items-center justify-between gap-2 rounded-[26px] bg-card/90 py-2 pr-2 pl-3 shadow-[var(--shadow-nav)] backdrop-blur-sm sm:pl-5">
         <Link href="/" className="flex items-center gap-2.5">
           <span className="flex size-8 items-center justify-center rounded-2xl bg-[linear-gradient(145deg,var(--primary-light),var(--primary))] pb-0.5 font-serif text-lg font-extrabold text-primary-foreground shadow-[var(--shadow-btn-primary)] sm:size-9">
@@ -114,6 +113,6 @@ export function SiteHeader() {
           </Link>
         </div>
       </div>
-    </div>
+    </header>
   );
 }

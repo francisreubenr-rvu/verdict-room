@@ -1,5 +1,12 @@
+import type { Metadata } from "next";
 import { Reveal } from "@/components/reveal";
 import { MarketingFooter } from "@/components/footer";
+
+export const metadata: Metadata = {
+  title: "About",
+  description: "Why The Verdict Room exists, and the pledge behind it: no affiliate links, ever.",
+  alternates: { canonical: "/about" },
+};
 
 const PRINCIPLES = [
   {

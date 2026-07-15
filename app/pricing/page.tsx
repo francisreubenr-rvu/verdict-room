@@ -1,15 +1,20 @@
-"use client";
-
-import { useState } from "react";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
 import { Reveal } from "@/components/reveal";
 import { MarketingFooter } from "@/components/footer";
+import { PricingFaq } from "@/components/pricing-faq";
 import { cn } from "@/lib/utils";
+
+export const metadata: Metadata = {
+  title: "Pricing",
+  description: "Two plans, no affiliate money. Free forever, or $12/month for unlimited reports.",
+  alternates: { canonical: "/pricing" },
+};
 
 const FREE_FEATURES = [
   { included: true, text: "3 research reports a month" },
-  { included: true, text: "~60 sources read per query" },
+  { included: true, text: "Up to 12 sources read per query" },
   { included: true, text: "Every paid voice labeled, with confidence" },
   { included: true, text: "Full source list on every report" },
 ];
@@ -31,13 +36,21 @@ const FAQS = [
   },
   {
     q: "Is my research history private?",
-    a: "Yes. Your queries are yours — never sold, never used to target you with the very ads we exist to see through. That would be a bit much.",
+    a: "Yes. Your queries are yours — never sold, never used to target you with the very ads we exist to see through. See our privacy page for exactly what we store and which services help fulfill a search.",
   },
 ];
 
-export default function PricingPage() {
-  const [openFaq, setOpenFaq] = useState<number | null>(null);
+const FAQ_JSON_LD = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: FAQS.map((faq) => ({
+    "@type": "Question",
+    name: faq.q,
+    acceptedAnswer: { "@type": "Answer", text: faq.a },
+  })),
+};
 
+export default function PricingPage() {
   return (
     <div className="flex flex-1 flex-col">
       <main className="mx-auto w-full max-w-[1128px] flex-1 px-4 py-16 sm:px-6 sm:py-20">
@@ -144,34 +157,15 @@ export default function PricingPage() {
           <div className="mb-5 text-center font-mono text-[11px] font-bold tracking-widest text-primary/80">
             REASONABLE QUESTIONS
           </div>
-          <div className="flex flex-col gap-3.5">
-            {FAQS.map((faq, i) => {
-              const open = openFaq === i;
-              return (
-                <div key={faq.q} className="overflow-hidden rounded-2xl bg-card shadow-[var(--shadow-raised)]">
-                  <button
-                    type="button"
-                    onClick={() => setOpenFaq(open ? null : i)}
-                    className="flex w-full items-center justify-between gap-3.5 px-6 py-4.5 text-left hover:bg-well/40"
-                  >
-                    <span className="font-serif text-lg font-bold">{faq.q}</span>
-                    <span className="flex size-[30px] shrink-0 items-center justify-center rounded-full bg-well font-mono font-bold text-accent-foreground shadow-[var(--shadow-well)]">
-                      {open ? "−" : "+"}
-                    </span>
-                  </button>
-                  {open ? (
-                    <p className="px-6 pb-5 font-serif text-[15.5px] leading-relaxed text-muted-foreground">
-                      {faq.a}
-                    </p>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
+          <PricingFaq faqs={FAQS} />
         </Reveal>
       </main>
 
       <MarketingFooter />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(FAQ_JSON_LD) }}
+      />
     </div>
   );
 }
