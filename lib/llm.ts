@@ -163,12 +163,12 @@ export async function generateSearchQueries(
   return { queries: input.queries.slice(0, 5), parsed: input.parsed };
 }
 
-// Up to 50 process-source calls for a Pro session (staggered ~1.2s apart, see
-// DISPATCH_STAGGER_MS in app/api/research/route.ts — not truly concurrent, but still well within
-// reach of Groq's free tier's 30 req/min or 8K tokens/min ceiling given enough sources) — a
-// single bounded retry after a short backoff lets a 429 clear instead of permanently failing
-// that source (there is no retry anywhere else in the
-// pipeline, so today one rate-limited call = one lost source, silently).
+// Used by both extractAndClassify (up to 50 calls for a Pro session, staggered ~1.2s apart —
+// see DISPATCH_STAGGER_MS in app/api/research/route.ts) and synthesize (once per session, but
+// its prompt scales with source count too). Only retries 429 (genuine transient rate limiting) —
+// deliberately not 413 "Request too large": that means the request itself is oversized, and
+// retrying the identical payload would just fail identically. A single bounded retry after a
+// short backoff lets a 429 clear instead of permanently failing that source/session.
 async function withRateLimitRetry<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
@@ -198,9 +198,13 @@ export async function extractAndClassify(input: {
 }> {
   const toolName = "emit_extraction";
 
+  // Reduced from 4096 2026-07-15: Groq's 8K TPM ceiling appears to count reserved output budget
+  // toward the same limit as prompt tokens, so a generous max_tokens was eating into the same
+  // headroom MAX_CONTENT_CHARS (lib/research/extract.ts) was trying to protect — confirmed live
+  // via real 413 "Request too large" errors. Findings are short structured JSON; 2000 is ample.
   const requestOptions: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming = {
     model: MODEL,
-    max_tokens: 4096,
+    max_tokens: 2000,
     tools: [
       {
         type: "function",
@@ -322,12 +326,31 @@ export async function synthesize(input: {
 }> {
   const toolName = "emit_synthesis";
 
-  const organicFindings = input.findings.filter((f) => f.sponsorship === "organic");
-  const nonOrganicFindings = input.findings.filter((f) => f.sponsorship !== "organic");
+  // Confirmed live 2026-07-15: this prompt scales with source count, and a real session (28
+  // dispatched sources) hit the same Groq 8K TPM 413 error extract+classify was hitting —
+  // synthesis has no earlier truncation step to shrink it, since it aggregates every finding
+  // from every processed source. Cap total findings and truncate each one's free-text fields so
+  // the prompt stays bounded regardless of how many sources a Pro session processes. Organic
+  // findings are kept first since those are what actually drives ranking; non-organic is only
+  // ever a supplementary note in the verdict, so it can be trimmed harder.
+  const MAX_FINDINGS = 60;
+  const MAX_FIELD_CHARS = 240;
+  const truncate = (s: string) => (s.length > MAX_FIELD_CHARS ? `${s.slice(0, MAX_FIELD_CHARS)}…` : s);
+  const shrink = (f: SynthesisFinding): SynthesisFinding => ({
+    ...f,
+    claim: truncate(f.claim),
+    quote: truncate(f.quote),
+  });
 
-  const response = await getGroq().chat.completions.create({
+  const allOrganic = input.findings.filter((f) => f.sponsorship === "organic").map(shrink);
+  const allNonOrganic = input.findings.filter((f) => f.sponsorship !== "organic").map(shrink);
+  const organicFindings = allOrganic.slice(0, MAX_FINDINGS);
+  const nonOrganicFindings = allNonOrganic.slice(0, Math.max(0, MAX_FINDINGS - organicFindings.length));
+
+  const response = await withRateLimitRetry(() =>
+    getGroq().chat.completions.create({
     model: MODEL,
-    max_tokens: 4096,
+    max_tokens: 2000,
     tools: [
       {
         type: "function",
@@ -381,7 +404,8 @@ export async function synthesize(input: {
         ].join("\n"),
       },
     ],
-  });
+    })
+  );
 
   return parseForcedToolCall<{
     options: Array<{ name: string; score: number; pros: string[]; cons: string[]; rank: number }>;

@@ -27,12 +27,15 @@ function detectPlatform(url: string): Platform {
   return "web";
 }
 
-// Groq's free tier is 8K tokens/min shared across every process-source call a session fires (up
-// to 50 for Pro, staggered but still landing within the same rate window) — a long review page's
-// full Jina markdown or YouTube transcript can run 50-100K characters and single-handedly blow
-// that budget. ~24K chars (~6K tokens) leaves headroom for the prompt scaffolding and the
-// model's own output within the per-call budget.
-const MAX_CONTENT_CHARS = 24_000;
+// Groq's free tier is a hard 8K tokens/min PER REQUEST (not just aggregate) for
+// openai/gpt-oss-120b — confirmed live 2026-07-15: a 24K char cap (assumed ~4 chars/token) still
+// produced 413 "Request too large" errors up to 18,066 requested tokens for real fetched pages
+// (e-commerce/listing-heavy content tokenizes far worse than 4 chars/token — lots of short
+// fragments, prices, punctuation). Cut hard to 8K chars, conservative enough to leave real
+// headroom under 8000 even for badly-tokenizing content once the tool-schema prompt overhead and
+// reserved max_tokens output budget are added in (Groq's TPM admission check appears to count
+// prompt + max_tokens together, not just prompt alone).
+const MAX_CONTENT_CHARS = 8_000;
 
 export async function processSource(url: string): Promise<{
   platform: Platform;
