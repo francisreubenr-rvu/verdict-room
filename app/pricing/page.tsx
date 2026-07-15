@@ -1,12 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
 import { Reveal } from "@/components/reveal";
 import { MarketingFooter } from "@/components/footer";
-import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
 const FREE_FEATURES = [
@@ -38,34 +36,7 @@ const FAQS = [
 ];
 
 export default function PricingPage() {
-  const router = useRouter();
   const [openFaq, setOpenFaq] = useState<number | null>(null);
-  const [isCheckingOut, setIsCheckingOut] = useState(false);
-  const [checkoutError, setCheckoutError] = useState<string | null>(null);
-
-  async function handleGoPro() {
-    setCheckoutError(null);
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      router.push("/login");
-      return;
-    }
-
-    setIsCheckingOut(true);
-    try {
-      const res = await fetch("/api/billing/checkout", { method: "POST" });
-      if (!res.ok) throw new Error(`Request failed (${res.status})`);
-      const { url } = await res.json();
-      window.location.href = url;
-    } catch {
-      setCheckoutError("Couldn't start checkout. Try again in a moment.");
-      setIsCheckingOut(false);
-    }
-  }
 
   return (
     <div className="flex flex-1 flex-col">
@@ -121,7 +92,7 @@ export default function PricingPage() {
 
             <div className="relative flex flex-col rounded-[30px] bg-[linear-gradient(150deg,var(--ink-light),var(--ink))] px-9 py-9 shadow-[var(--shadow-ink)]">
               <span className="absolute top-[-14px] right-8 rotate-[3deg] rounded-xl bg-[linear-gradient(145deg,var(--accent-light),var(--accent))] px-3.5 py-1.5 font-mono text-[10px] font-bold tracking-wide text-accent-foreground">
-                MOST HONEST DEAL
+                COMING SOON
               </span>
               <div className="font-mono text-[11.5px] font-bold tracking-widest text-accent-light">
                 PRO
@@ -133,7 +104,8 @@ export default function PricingPage() {
                 <span className="font-mono text-xs text-[#a8987a]">/ MONTH</span>
               </div>
               <p className="mt-2.5 font-serif text-[15.5px] text-[#cbbf9e]">
-                For the chronically curious. Cancel whenever.
+                For the chronically curious. Billing isn&apos;t live yet — this is the plan, not
+                yet a purchase.
               </p>
               <div className="my-6 flex flex-col gap-3">
                 {PRO_FEATURES.map((f) => (
@@ -154,21 +126,18 @@ export default function PricingPage() {
               </div>
               <button
                 type="button"
-                onClick={handleGoPro}
-                disabled={isCheckingOut}
-                className={cn(buttonVariants({ size: "lg" }), "mt-auto")}
+                disabled
+                title="Pro billing isn't live yet"
+                className="mt-auto inline-flex h-12 cursor-not-allowed items-center justify-center rounded-2xl border-2 border-dashed border-[color:var(--accent-light)]/45 px-6 text-[0.95rem] font-medium text-[color:var(--accent-light)] font-mono"
               >
-                {isCheckingOut ? "Redirecting…" : "Go Pro →"}
+                Coming soon
               </button>
-              {checkoutError ? (
-                <p className="mt-3 font-mono text-xs text-[#e2988a]">{checkoutError}</p>
-              ) : null}
             </div>
           </div>
         </Reveal>
 
         <div className="mt-4 text-center font-mono text-[11px] tracking-wide text-muted-foreground">
-          USD · CANCEL ANYTIME · YOUR REPORTS STAY YOURS
+          USD · PRO BILLING NOT LIVE YET · FREE TIER NEEDS NO CARD
         </div>
 
         <Reveal className="mx-auto mt-16 max-w-[760px]">
