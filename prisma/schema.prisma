@@ -37,6 +37,17 @@ enum Plan {
   pro
 }
 
+// Tracks every URL discoverySources surfaced for a session, not just the ones that
+// ended up as a linked Source — the audit trail behind the "every site we checked"
+// transparency panel. "discovered" rows are overflow candidates past the plan's
+// source cap, promoted to "dispatched" by the backfill step if earlier dispatches fail.
+enum AttemptStatus {
+  discovered
+  dispatched
+  succeeded
+  failed
+}
+
 // One row per Supabase Auth user who has ever started a Stripe checkout. Absence of a row
 // means "free, never subscribed" — see lib/billing.ts for the default-free lookup helper.
 // SITE-REDESIGN-PLAN.md §Stage C: billing + quota only, no deep-dive/export/price-watch/queue.
@@ -65,8 +76,28 @@ model ResearchSession {
   updatedAt       DateTime @updatedAt
   sources         SessionSource[]
   options         Option[]
+  attempts        SourceAttempt[]
 
   @@index([userId])
+}
+
+// One row per URL discoverySources surfaced for a session — including ones that never
+// got dispatched (overflow past the source cap) and ones that were dispatched but
+// failed. Distinct from SessionSource, which only ever links successes.
+model SourceAttempt {
+  id            String        @id @default(cuid())
+  sessionId     String
+  session       ResearchSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  url           String
+  platform      Platform
+  status        AttemptStatus @default(discovered)
+  failureReason String?       // no_transcript|fetch_failed|blocked|extraction_error — set only on status="failed"
+  sourceId      String?       // set once status="succeeded" — the resulting Source row
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@unique([sessionId, url])
+  @@index([sessionId])
 }
 
 // join table: many sessions can share one cached Source
@@ -89,6 +120,8 @@ model Source {
   sponsorship       Sponsorship?
   sponsorConfidence Float?
   summary           String?
+  reviewDraft       String?      // youtube only — synthesized per-video review paragraph
+  groundednessConfidence Float?  // youtube only — how well pain/good points are supported by the transcript
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt  // drives the 30-day freshness check in §3 step 2
   sessions          SessionSource[]

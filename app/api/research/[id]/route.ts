@@ -30,7 +30,10 @@ export async function GET(
 
   const session = await prisma.researchSession.findFirst({
     where: { id, userId: user.id },
-    include: { sources: { include: { source: true } } },
+    include: {
+      sources: { include: { source: true } },
+      attempts: { orderBy: { createdAt: "asc" } },
+    },
   });
 
   if (!session) {
@@ -61,6 +64,17 @@ export async function GET(
     sponsorship: source.sponsorship,
     sponsorConfidence: source.sponsorConfidence,
     summary: source.summary,
+    reviewDraft: source.reviewDraft,
+    groundednessConfidence: source.groundednessConfidence,
+  }));
+
+  const attempts = session.attempts.map((attempt) => ({
+    id: attempt.id,
+    url: attempt.url,
+    platform: attempt.platform,
+    status: attempt.status,
+    failureReason: attempt.failureReason,
+    sourceId: attempt.sourceId,
   }));
 
   return NextResponse.json({
@@ -73,5 +87,6 @@ export async function GET(
     createdAt: session.createdAt.toISOString(),
     updatedAt: session.updatedAt.toISOString(),
     sources,
+    attempts,
   });
 }

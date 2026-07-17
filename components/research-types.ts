@@ -46,6 +46,22 @@ export interface ResearchSource {
   sponsorship: Sponsorship | null;
   sponsorConfidence: number | null;
   summary: string | null;
+  reviewDraft: string | null;
+  groundednessConfidence: number | null;
+}
+
+export type AttemptStatus = "discovered" | "dispatched" | "succeeded" | "failed";
+
+// Backs the "every site we checked" transparency panel — one entry per URL discoverySources
+// surfaced for a session, including ones that never got dispatched (past the plan's cap) and
+// ones that were dispatched but failed, not just the successes SourceList already shows.
+export interface ResearchAttempt {
+  id: string;
+  url: string;
+  platform: Platform;
+  status: AttemptStatus;
+  failureReason: string | null;
+  sourceId: string | null;
 }
 
 // Failure reasons written by the pipeline (app/api/research/**) when status="failed". Kept as a
@@ -90,6 +106,7 @@ export interface ResearchSessionResponse {
   createdAt: string;
   updatedAt: string;
   sources: ResearchSource[];
+  attempts: ResearchAttempt[];
 }
 
 // GET /api/research — one entry per session for the landing page's "Recent research" list

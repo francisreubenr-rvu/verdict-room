@@ -46,7 +46,7 @@ const STAGES = [
   {
     n: 3,
     label: "FETCHING",
-    copy: "We open up to 50 tabs so you don't have to — searched across the web, Reddit threads, and YouTube reviews, not just one search engine. Transcripts pulled, threads unrolled, paywalled fluff skipped. Every document gets a receipt: who wrote it, when, where.",
+    copy: "We open dozens of tabs so you don't have to (up to 50 on Pro) — searched across the web, Reddit threads, and YouTube reviews, not just one search engine. Transcripts pulled, threads unrolled, paywalled fluff skipped. Every document gets a receipt: who wrote it, when, where — including the ones that didn't make the cut.",
     detail: (
       <div className="rounded-2xl bg-well px-5 py-3 text-center shadow-[var(--shadow-well)]">
         <div className="font-serif text-3xl font-extrabold">50</div>

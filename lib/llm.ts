@@ -87,14 +87,18 @@ export type Finding = {
 
 /**
  * Step 1 of PLAN.md §3: one LLM call that parses the natural-language query into
- * {product, useCase, budget} and generates 3-5 targeted search query strings covering the
+ * {product, useCase, budget} and generates targeted search query strings covering the
  * product name, "best X review", "X reddit", "X problems/complaints", and "X sponsored review"
- * patterns.
+ * patterns. Free sessions keep the original 3-5 query bound; Pro sessions ask for up to 10 —
+ * the 50-source Pro cap needs a wide enough candidate pool to actually approach, not just a
+ * higher cap number with the same handful of queries feeding it.
  */
 export async function generateSearchQueries(
-  query: string
+  query: string,
+  plan: "free" | "pro" = "free"
 ): Promise<{ queries: string[]; parsed: ParsedQuery }> {
   const toolName = "emit_search_plan";
+  const maxQueries = plan === "pro" ? 10 : 5;
 
   const response = await getGroq().chat.completions.create({
     model: MODEL,
@@ -132,11 +136,10 @@ export async function generateSearchQueries(
               },
               queries: {
                 type: "array",
-                description:
-                  "3 to 5 targeted search engine query strings: the bare product name, a 'best X review' style query, an 'X reddit' query, an 'X problems' or 'X complaints' query, and an 'X sponsored review' style query. Tailor wording to the parsed product/useCase/budget.",
+                description: `3 to ${maxQueries} targeted search engine query strings: the bare product name, a 'best X review' style query, an 'X reddit' query, an 'X problems' or 'X complaints' query, an 'X sponsored review' style query, and (space permitting) additional angles like specific competing models, use-case-specific phrasing, and forum/community terms. Tailor wording to the parsed product/useCase/budget.`,
                 items: { type: "string" },
                 minItems: 3,
-                maxItems: 5,
+                maxItems: maxQueries,
               },
             },
             required: ["parsed", "queries"],
@@ -158,9 +161,9 @@ export async function generateSearchQueries(
     toolName,
     "generateSearchQueries"
   );
-  // The 3-5 item bound is a schema *hint*, not an enforced constraint — a model that ignores it
-  // fires one extra Jina Search call per extra query, eating into the shared Jina token pool.
-  return { queries: input.queries.slice(0, 5), parsed: input.parsed };
+  // The item-count bound is a schema *hint*, not an enforced constraint — a model that ignores
+  // it fires one extra Jina Search call per extra query, eating into the shared Jina token pool.
+  return { queries: input.queries.slice(0, maxQueries), parsed: input.parsed };
 }
 
 // Used by both extractAndClassify (up to 50 calls for a Pro session, staggered ~1.2s apart —
@@ -184,6 +187,18 @@ async function withRateLimitRetry<T>(fn: () => Promise<T>): Promise<T> {
  * Step 2 of PLAN.md §3: the merged extract+classify LLM call, run once per fetched source.
  * Extracts option-level findings (claim/sentiment/quote) and classifies the source's
  * sponsorship posture (organic/sponsored/affiliate) with a confidence score.
+ *
+ * Findings capped at 12 (schema `maxItems`) with claim/quote length-guided to ~100 chars each —
+ * confirmed live 2026-07-17: a many-product roundup/listicle source (e.g. a "10 best keyboards
+ * under $100" article) generates enough findings to exhaust the 2000-token output budget
+ * mid-JSON, producing a truncated tool-call argument string that fails to parse (a real, observed
+ * 400 "Failed to parse tool call arguments as JSON"). This got materially more likely once the
+ * widened source discovery (2026-07-16) started actually surfacing this kind of content instead
+ * of stalling out around 6-8 sources. `maxItems` alone wasn't enough — a second live run still
+ * truncated with as few as 5 findings when the model wrote long, verbatim quotes instead of short
+ * paraphrases, so the description now explicitly bounds string length too, not just count.
+ * Bounding findings per source here also shrinks synthesize()'s aggregate input, see its own
+ * MAX_FINDINGS/MAX_FIELD_CHARS comment for the matching downstream tightening.
  */
 export async function extractAndClassify(input: {
   url: string;
@@ -218,7 +233,7 @@ export async function extractAndClassify(input: {
               findings: {
                 type: "array",
                 description:
-                  "Discrete claims made about specific product options in this source. One entry per distinct claim.",
+                  "The 12 most significant, distinct claims made about specific product options in this source — one entry per distinct claim. For a roundup/listicle covering many products, prioritize breadth (one strong claim per product) over exhaustively covering any single one.",
                 items: {
                   type: "object",
                   properties: {
@@ -228,7 +243,7 @@ export async function extractAndClassify(input: {
                     },
                     claim: {
                       type: "string",
-                      description: "A concise statement of the claim being made.",
+                      description: "A concise statement of the claim being made — one short sentence, under 100 characters.",
                     },
                     sentiment: {
                       type: "string",
@@ -236,11 +251,13 @@ export async function extractAndClassify(input: {
                     },
                     quote: {
                       type: "string",
-                      description: "A short supporting quote or paraphrase pulled from the source content.",
+                      description:
+                        "A short supporting quote or paraphrase pulled from the source content — under 100 characters, trimmed to the essential phrase, not the full sentence it came from.",
                     },
                   },
                   required: ["option", "claim", "sentiment", "quote"],
                 },
+                maxItems: 12,
               },
               sponsorship: {
                 type: "string",
@@ -299,6 +316,159 @@ export async function extractAndClassify(input: {
   };
 }
 
+/**
+ * YouTube-specific version of the merged extract+classify call above, added 2026-07-16 for the
+ * "streamline the YouTube pipeline" request: transcribe -> script -> verify -> pain/good points
+ * -> review. Deliberately one merged Groq call, not a 4-call chain (user decision — Groq's free
+ * tier is already tight against 15/50-source sessions; a per-video 4x call multiplier would make
+ * that meaningfully worse). The "script" and "verify" steps are folded into this call's
+ * instructions rather than separate round-trips: the model is told to reconstruct a coherent
+ * narrative from the raw (unpunctuated, unsegmented) transcript, but to self-report how well
+ * grounded its extracted points actually are rather than inventing claims to fill gaps.
+ */
+export async function extractYoutubeReview(input: {
+  url: string;
+  transcript: string;
+}): Promise<{
+  findings: Finding[];
+  sponsorship: Sponsorship;
+  sponsorConfidence: number;
+  summary: string;
+  author: string | null;
+  reviewDraft: string;
+  groundednessConfidence: number;
+}> {
+  const toolName = "emit_youtube_review";
+
+  // 2500 vs extractAndClassify's 2000 — this call produces everything extractAndClassify does
+  // PLUS reviewDraft (a 3-6 sentence paragraph), so it needs real extra output headroom or the
+  // reviewDraft field is what gets cut off mid-string (confirmed live 2026-07-17). Findings are
+  // capped tighter (8 vs extractAndClassify's 12) for the same reason, in the other direction —
+  // leaving room for that paragraph without the whole call needing an even bigger budget that
+  // would risk tripping Groq's 8K TPM admission ceiling once prompt tokens are added in.
+  const requestOptions: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming = {
+    model: MODEL,
+    max_tokens: 2500,
+    tools: [
+      {
+        type: "function",
+        function: {
+          name: toolName,
+          description:
+            "Reconstruct a coherent review from a raw YouTube caption transcript: extract pain points and good points per product option, classify sponsorship, and write a short synthesized review — all strictly grounded in what the transcript actually says.",
+          parameters: {
+            type: "object",
+            properties: {
+              findings: {
+                type: "array",
+                description:
+                  "The 8 most significant, distinct pain points (sentiment: con) and good points (sentiment: pro) about specific product options mentioned in this video, each traceable to something actually said in the transcript. For a video comparing many products, prioritize breadth (one strong point per product) over exhaustively covering any single one.",
+                items: {
+                  type: "object",
+                  properties: {
+                    option: {
+                      type: "string",
+                      description: "The specific product/model name this claim is about, free text.",
+                    },
+                    claim: {
+                      type: "string",
+                      description:
+                        "A concise statement of the pain point or good point being made — one short sentence, under 100 characters.",
+                    },
+                    sentiment: {
+                      type: "string",
+                      enum: ["pro", "con", "neutral"],
+                      description: "pro = good point, con = pain point, neutral = neither.",
+                    },
+                    quote: {
+                      type: "string",
+                      description:
+                        "A short supporting quote or paraphrase pulled from the transcript — under 100 characters, trimmed to the essential phrase, not the full sentence it came from.",
+                    },
+                  },
+                  required: ["option", "claim", "sentiment", "quote"],
+                },
+                // Tighter than extractAndClassify's 12 — see the max_tokens comment above for why
+                // this call needs to leave more headroom (the reviewDraft field). Confirmed live
+                // 2026-07-17 that an unbounded findings list, or long unbounded claim/quote text
+                // even at a lower count, can exhaust the output budget mid-JSON and fail to parse.
+                maxItems: 8,
+              },
+              sponsorship: {
+                type: "string",
+                enum: ["organic", "sponsored", "affiliate"],
+                description:
+                  "organic: no compensation disclosed or evident. sponsored: paid placement/sponsorship disclosed or evident (e.g. 'thanks to X for sponsoring'). affiliate: affiliate links/commission disclosed or evident.",
+              },
+              sponsorConfidence: {
+                type: "number",
+                description: "Confidence in the sponsorship classification, from 0 to 1.",
+              },
+              summary: {
+                type: "string",
+                description: "A one to three sentence summary of what this video covers.",
+              },
+              author: {
+                type: ["string", "null"],
+                description: "The channel name if identifiable in the transcript content, else null.",
+              },
+              reviewDraft: {
+                type: "string",
+                description:
+                  "A short (3 to 6 sentence) synthesized review of this specific video's take — what it concluded, its strongest pain points and good points, written in plain language a shopper can quickly read instead of watching the whole video.",
+              },
+              groundednessConfidence: {
+                type: "number",
+                description:
+                  "Honest 0 to 1 confidence that the findings and review above are well-supported by the actual transcript content, not invented to fill gaps. Lower this (not the findings themselves) when the transcript is short, garbled, mostly unrelated to product opinions (e.g. an ad-only intro), or ambiguous — never fabricate a claim just to raise this score.",
+              },
+            },
+            required: [
+              "findings",
+              "sponsorship",
+              "sponsorConfidence",
+              "summary",
+              "author",
+              "reviewDraft",
+              "groundednessConfidence",
+            ],
+          },
+        },
+      },
+    ],
+    tool_choice: { type: "function", function: { name: toolName } },
+    messages: [
+      {
+        role: "user",
+        content: `YouTube video URL: ${input.url}\n\nRaw caption transcript (unpunctuated, unsegmented — reconstruct the sense of it yourself):\n${input.transcript}\n\nExtract pain/good points, classify sponsorship, and write a review per the tool schema.`,
+      },
+    ],
+  };
+
+  const response = await withRateLimitRetry(() => getGroq().chat.completions.create(requestOptions));
+
+  const parsed = parseForcedToolCall<{
+    findings: Finding[];
+    sponsorship: Sponsorship;
+    sponsorConfidence: number;
+    summary: string;
+    author: string | null;
+    reviewDraft: string;
+    groundednessConfidence: number;
+  }>(response.choices[0].message, toolName, "extractYoutubeReview");
+
+  assertSponsorship(parsed.sponsorship, "extractYoutubeReview");
+  for (const finding of parsed.findings) {
+    assertSentiment(finding.sentiment, "extractYoutubeReview finding");
+  }
+
+  return {
+    ...parsed,
+    sponsorConfidence: Math.min(1, Math.max(0, parsed.sponsorConfidence)),
+    groundednessConfidence: Math.min(1, Math.max(0, parsed.groundednessConfidence)),
+  };
+}
+
 export type SynthesisFinding = {
   sourceId: string;
   url: string;
@@ -333,8 +503,14 @@ export async function synthesize(input: {
   // the prompt stays bounded regardless of how many sources a Pro session processes. Organic
   // findings are kept first since those are what actually drives ranking; non-organic is only
   // ever a supplementary note in the verdict, so it can be trimmed harder.
-  const MAX_FINDINGS = 60;
-  const MAX_FIELD_CHARS = 240;
+  //
+  // Tightened twice 2026-07-17: 60/240 hit a real 413 ("Requested 11026" vs the 8000 limit) once
+  // widened source discovery started delivering 14+ successful sources per session instead of
+  // 6-8. Cutting to 40/180 closed most of the gap but a second live run still overshot by a
+  // smaller margin ("Requested 8282"). Cut again to 32/150 for real margin instead of nickel-
+  // and-diming this against paid API calls on every iteration.
+  const MAX_FINDINGS = 32;
+  const MAX_FIELD_CHARS = 150;
   const truncate = (s: string) => (s.length > MAX_FIELD_CHARS ? `${s.slice(0, MAX_FIELD_CHARS)}…` : s);
   const shrink = (f: SynthesisFinding): SynthesisFinding => ({
     ...f,

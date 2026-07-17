@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { waitUntil } from "@vercel/functions";
 import { prisma } from "@/lib/db";
-import { processSource } from "@/lib/research/extract";
+import { detectPlatform, processSource } from "@/lib/research/extract";
 import { isTerminalStatus, TERMINAL_STATUSES } from "@/components/research-types";
 import {
   assertInternalCaller,
@@ -13,6 +13,21 @@ import {
 // PLAN.md §3 step 2: fetch + extract + classify one source, then check whether this was the
 // last outstanding source for the session and — if so — kick off synthesize.
 const FRESHNESS_WINDOW_MS = 30 * 24 * 60 * 60 * 1000; // 30 days, per PLAN.md §3 step 2
+
+// Best-effort failure classification for the transparency panel. `processSource`'s fetch layer
+// deliberately returns null rather than a reason (see lib/research/fetch/*.ts) so this can't be
+// exact, but platform is a solid proxy for *why* right now: Reddit's unauthenticated JSON access
+// is permanently blocked by Reddit's own policy (not a bug in our client — see SOURCING-PLAN.md),
+// so a Reddit null is always "blocked" today; YouTube nulls are almost always missing captions.
+// A thrown error only ever comes from the extract/classify LLM call, never the fetch step (those
+// are documented "returns null, does not throw").
+function classifyFailure(url: string, threw: boolean): string {
+  if (threw) return "extraction_error";
+  const platform = detectPlatform(url);
+  if (platform === "reddit") return "blocked";
+  if (platform === "youtube") return "no_transcript";
+  return "fetch_failed";
+}
 
 export async function POST(
   request: Request,
@@ -55,8 +70,17 @@ export async function POST(
   }
 
   // Stray/duplicate invocation arriving after the session already reached a terminal status —
-  // nothing useful to do (mirrors the same guard used for the completion check below).
+  // nothing useful to do for the session itself (mirrors the same guard used for the completion
+  // check below), but this URL's SourceAttempt row still needs closing out — otherwise it's
+  // stuck showing "pending" in the transparency panel forever (review finding, 2026-07-17): a
+  // session reaped as timed_out (GET /api/research/[id]'s staleness check) can leave in-flight
+  // process-source calls landing after the fact, and without this update their attempt rows
+  // would never resolve even though the session itself is done.
   if (isTerminalStatus(session.status)) {
+    await prisma.sourceAttempt.updateMany({
+      where: { sessionId, url, status: { in: ["dispatched", "discovered"] } },
+      data: { status: "failed", failureReason: "session_ended" },
+    });
     return NextResponse.json({ ok: true });
   }
 
@@ -73,6 +97,8 @@ export async function POST(
   // done" detection (it would sit in a non-terminal status forever). Catch broadly and fall back
   // to (b) so a single bad source degrades gracefully instead of hanging the whole session.
   let sourceFailed = false;
+  let threw = false;
+  let resolvedSourceId: string | null = null;
   try {
     if (existing && isFresh) {
       // Cache hit — skip fetch + LLM entirely, just link the cached Source into this session.
@@ -81,6 +107,7 @@ export async function POST(
         create: { sessionId, sourceId: existing.id },
         update: {},
       });
+      resolvedSourceId = existing.id;
     } else {
       // Cache miss or stale — fetch + extract + classify.
       const result = await processSource(url);
@@ -95,6 +122,8 @@ export async function POST(
             sponsorship: result.sponsorship,
             sponsorConfidence: result.sponsorConfidence,
             summary: result.summary,
+            reviewDraft: result.reviewDraft,
+            groundednessConfidence: result.groundednessConfidence,
           },
           update: {
             platform: result.platform,
@@ -102,6 +131,8 @@ export async function POST(
             sponsorship: result.sponsorship,
             sponsorConfidence: result.sponsorConfidence,
             summary: result.summary,
+            reviewDraft: result.reviewDraft,
+            groundednessConfidence: result.groundednessConfidence,
           },
         });
 
@@ -128,6 +159,7 @@ export async function POST(
           create: { sessionId, sourceId: source.id },
           update: {},
         });
+        resolvedSourceId = source.id;
       } else {
         sourceFailed = true;
       }
@@ -135,16 +167,72 @@ export async function POST(
   } catch (err) {
     console.error(`process-source: failed processing ${url} for session ${sessionId}:`, err);
     sourceFailed = true;
+    threw = true;
   }
 
   if (sourceFailed) {
-    // Fetch/extract/classify failed (or threw) — don't create/link a Source row, but this URL
-    // still counts as "done" for completion-detection purposes. Since no SessionSource row is
-    // created for it, shrink the expected total instead so the count-vs-expected check below
-    // still resolves.
-    await prisma.researchSession.update({
-      where: { id: sessionId },
-      data: { expectedSources: { decrement: 1 } },
+    const failureReason = classifyFailure(url, threw);
+    await prisma.sourceAttempt.updateMany({
+      where: { sessionId, url },
+      data: { status: "failed", failureReason },
+    });
+
+    // Bounded backfill (2026-07-16, source-count fix): before shrinking expectedSources, try to
+    // claim one "discovered" (overflow, past the plan's cap) SourceAttempt as a replacement, so
+    // sessions actually approach the advertised source cap instead of every failure just
+    // permanently lowering the target. Claim via a conditional updateMany (not a plain update)
+    // so two concurrent failures can't both grab the same overflow candidate — the loser's
+    // updateMany matches zero rows since Postgres serializes the two UPDATEs.
+    //
+    // Retries against a few candidates (not just one) — review finding, 2026-07-17: near-
+    // simultaneous failures (plausible even with staggered dispatch, e.g. two same-cause
+    // timeouts landing close together) can both fetch the SAME oldest "discovered" row before
+    // either commits its claim; without a retry, the loser gave up even when a second, untouched
+    // candidate existed. Capped at BACKFILL_CLAIM_ATTEMPTS so this can't loop indefinitely if the
+    // overflow pool is being claimed by many concurrent failures at once.
+    const BACKFILL_CLAIM_ATTEMPTS = 3;
+    let backfilled = false;
+    for (let attempt = 0; attempt < BACKFILL_CLAIM_ATTEMPTS && !backfilled; attempt++) {
+      const candidate = await prisma.sourceAttempt.findFirst({
+        where: { sessionId, status: "discovered" },
+        orderBy: { createdAt: "asc" },
+      });
+      if (!candidate) break;
+
+      const claimed = await prisma.sourceAttempt.updateMany({
+        where: { id: candidate.id, status: "discovered" },
+        data: { status: "dispatched" },
+      });
+      if (claimed.count > 0) {
+        backfilled = true;
+        const target = internalUrl(`/api/research/${sessionId}/process-source`, request);
+        waitUntil(
+          dispatchInternal(
+            target,
+            {
+              method: "POST",
+              headers: internalHeaders({ "Content-Type": "application/json" }),
+              body: JSON.stringify({ url: candidate.url }),
+            },
+            "process-source backfill"
+          )
+        );
+      }
+      // Lost the race for this candidate — loop and try the next-oldest "discovered" row.
+    }
+
+    if (!backfilled) {
+      // No replacement left in the overflow pool — shrink the expected total instead so the
+      // count-vs-expected completion check below still resolves.
+      await prisma.researchSession.update({
+        where: { id: sessionId },
+        data: { expectedSources: { decrement: 1 } },
+      });
+    }
+  } else if (resolvedSourceId) {
+    await prisma.sourceAttempt.updateMany({
+      where: { sessionId, url },
+      data: { status: "succeeded", sourceId: resolvedSourceId },
     });
   }
 

@@ -3,12 +3,18 @@
 // extract+classify LLM call. Returns null (never throws for the "no content" case) so the
 // caller — an API route outside this module's scope — can skip the source gracefully.
 
-import { extractAndClassify, type Finding, type Platform, type Sponsorship } from "@/lib/llm";
+import {
+  extractAndClassify,
+  extractYoutubeReview,
+  type Finding,
+  type Platform,
+  type Sponsorship,
+} from "@/lib/llm";
 import { fetchYoutubeTranscript } from "@/lib/research/fetch/youtube";
-import { fetchRedditContent } from "@/lib/research/fetch/reddit";
+import { fetchRedditContent } from "@/lib/research/fetch/reddit-browserbase";
 import { fetchWebContent } from "@/lib/research/fetch/web";
 
-function detectPlatform(url: string): Platform {
+export function detectPlatform(url: string): Platform {
   let hostname: string;
   try {
     hostname = new URL(url).hostname;
@@ -45,6 +51,8 @@ export async function processSource(url: string): Promise<{
   sponsorship: Sponsorship;
   sponsorConfidence: number;
   summary: string;
+  reviewDraft: string | null;
+  groundednessConfidence: number | null;
 } | null> {
   const platform = detectPlatform(url);
 
@@ -77,6 +85,23 @@ export async function processSource(url: string): Promise<{
   const truncatedContent =
     content.length > MAX_CONTENT_CHARS ? content.slice(0, MAX_CONTENT_CHARS) : content;
 
+  // YouTube gets the merged transcribe/script/verify/pain-good-points/review pipeline
+  // (lib/llm.ts's extractYoutubeReview); reddit/web keep the generic extractAndClassify.
+  if (platform === "youtube") {
+    const review = await extractYoutubeReview({ url, transcript: truncatedContent });
+    return {
+      platform,
+      content,
+      author: review.author ?? fetchedAuthor,
+      findings: review.findings,
+      sponsorship: review.sponsorship,
+      sponsorConfidence: review.sponsorConfidence,
+      summary: review.summary,
+      reviewDraft: review.reviewDraft,
+      groundednessConfidence: review.groundednessConfidence,
+    };
+  }
+
   const classification = await extractAndClassify({ url, platform, content: truncatedContent });
 
   return {
@@ -87,5 +112,7 @@ export async function processSource(url: string): Promise<{
     sponsorship: classification.sponsorship,
     sponsorConfidence: classification.sponsorConfidence,
     summary: classification.summary,
+    reviewDraft: null,
+    groundednessConfidence: null,
   };
 }

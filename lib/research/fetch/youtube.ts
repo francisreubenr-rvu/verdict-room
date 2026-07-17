@@ -1,6 +1,19 @@
-// The Verdict Room — YouTube transcript fetch via direct `fetch` (PLAN.md §2).
-// No subprocess/binary (yt-dlp explicitly ruled out for Vercel compatibility). Missing captions
-// is an expected, non-error case — returns null, does not throw.
+// The Verdict Room — YouTube transcript fetch (PLAN.md §2).
+// Missing captions is an expected, non-error case — returns null, does not throw.
+//
+// Changed 2026-07-16: replaced the hand-rolled `ytInitialPlayerResponse` regex-scrape (which hit
+// a consent-redirect-loop bug in production, see lib/research/search.ts's youtubeSearch for the
+// same class of issue) with `youtube-caption-extractor` (repos/youtube-caption-extractor, MIT).
+// It posts directly to YouTube's InnerTube API with a multi-client fallback chain (iOS/Android
+// VR/mobile web profiles) instead of scraping the watch page's embedded JSON, sidestepping the
+// consent-cookie/localization-redirect class of failure entirely. Trade-off: its typed
+// `VideoDetails` surface only exposes title/description, not the channel/author name our old
+// scrape read from `videoDetails.author` — `fetchYoutubeTranscript` now always returns
+// `author: null`, and the merged YouTube review pipeline's own LLM call
+// (`extractYoutubeReview` in lib/llm.ts) is the only remaining source for an author guess, on a
+// best-effort basis (transcripts rarely state the channel name explicitly).
+
+import { getSubtitles } from "youtube-caption-extractor";
 
 function extractVideoId(url: string): string | null {
   let parsed: URL;
@@ -30,36 +43,9 @@ function extractVideoId(url: string): string | null {
   return null;
 }
 
-// Decodes the small set of HTML entities YouTube's timedtext XML actually emits, and strips any
-// residual tags (e.g. <i>, <b> used for styling within caption cues).
-function decodeTranscriptText(raw: string): string {
-  return raw
-    .replace(/<[^>]+>/g, "")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .trim();
-}
-
-function parseTranscriptXml(xml: string): string | null {
-  const matches = [...xml.matchAll(/<text[^>]*>([\s\S]*?)<\/text>/g)];
-  if (matches.length === 0) {
-    return null;
-  }
-  const lines = matches.map((m) => decodeTranscriptText(m[1])).filter((line) => line.length > 0);
-  return lines.length > 0 ? lines.join(" ") : null;
-}
-
-type CaptionTrack = {
-  baseUrl: string;
-  languageCode?: string;
-};
-
-// Bounds each network call so a hung request fails fast instead of riding out the serverless
-// function's own execution-time limit (which would kill the invocation before it ever gets a
-// chance to record completion — see the caller's "last one done" accounting).
+// Bounds the InnerTube + caption-track network calls so a hung request fails fast instead of
+// riding out the serverless function's own execution-time limit (which would kill the invocation
+// before it ever gets a chance to record completion — see the caller's "last one done" accounting).
 const FETCH_TIMEOUT_MS = 15_000;
 
 export async function fetchYoutubeTranscript(
@@ -70,71 +56,35 @@ export async function fetchYoutubeTranscript(
     return null;
   }
 
-  // This function documents "returns null, does not throw" — wrap the network calls so that
-  // holds for network-level failures (DNS, timeout, abort), not just non-2xx HTTP responses.
   try {
-    const pageResponse = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        // See lib/research/search.ts's youtubeSearch for why: confirmed live that Vercel's
-        // outbound IPs hit a consent/localization redirect loop on youtube.com without this
-        // (Google's consent gate is site-wide, not path-specific, so the same fix applies here).
-        Cookie: "CONSENT=YES+1",
-      },
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    const subtitles = await getSubtitles({
+      videoID: videoId,
+      lang: "en",
+      fetch: (input, init) =>
+        fetch(input, { ...init, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }),
     });
-    if (!pageResponse.ok) {
-      return null;
-    }
-    const html = await pageResponse.text();
 
-    const playerResponseMatch = html.match(/ytInitialPlayerResponse\s*=\s*(\{[\s\S]*?\});/);
-    if (!playerResponseMatch) {
+    if (subtitles.length === 0) {
       return null;
     }
 
-    let playerResponse: {
-      videoDetails?: { author?: string };
-      captions?: {
-        playerCaptionsTracklistRenderer?: { captionTracks?: CaptionTrack[] };
-      };
-    };
-    try {
-      playerResponse = JSON.parse(playerResponseMatch[1]);
-    } catch {
-      return null;
-    }
+    const content = subtitles
+      .map((s) => s.text.trim())
+      .filter((text) => text.length > 0)
+      .join(" ");
 
-    const author = playerResponse.videoDetails?.author ?? null;
-    const captionTracks = playerResponse.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-    if (!captionTracks || captionTracks.length === 0) {
-      return null;
-    }
-
-    const track =
-      captionTracks.find((t) => t.languageCode?.startsWith("en")) ?? captionTracks[0];
-
-    const transcriptResponse = await fetch(track.baseUrl, {
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
-    if (!transcriptResponse.ok) {
-      return null;
-    }
-    const xml = await transcriptResponse.text();
-
-    const content = parseTranscriptXml(xml);
     if (!content) {
       return null;
     }
 
-    return { content, author };
+    // See file header — the library's typed surface doesn't expose the channel/author name.
+    return { content, author: null };
   } catch (err) {
-    // Network error, timeout, or abort — still treated as "no transcript available" (the
-    // caller degrades gracefully, this isn't fatal to the session), but logged rather than
-    // silent so a systemic issue (e.g. the redirect-loop bug this file's fetch call already
-    // hit once, see the Cookie header above) is diagnosable from get_runtime_errors instead of
-    // just looking like "YouTube sources never contribute anything."
+    // Every client in the library's fallback chain failed (private/deleted video, no captions on
+    // any profile, or a network-level failure) — still "no transcript available", not fatal to
+    // the session, but logged so a systemic issue (e.g. YouTube tightening bot detection further)
+    // is diagnosable from get_runtime_errors instead of just looking like "YouTube sources never
+    // contribute anything."
     console.error(`fetchYoutubeTranscript: request for ${url} threw`, err);
     return null;
   }

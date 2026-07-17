@@ -42,6 +42,12 @@ type JinaSearchResponse = {
   data?: Array<{ url?: string; title?: string; description?: string }>;
 };
 
+// Jina's default per-query result count is small and unconfigured — this was the main driver
+// of the "up to 50 sources" claim collapsing to single digits (3-5 queries x a handful of
+// results each, before any fetch/extract failures even shrink it further). `num` is a
+// documented s.jina.ai param that raises the max results returned per query — see docs.jina.ai.
+const RESULTS_PER_QUERY = 15;
+
 export async function webSearch(query: string): Promise<SearchResult[]> {
   const apiKey = process.env.JINA_API_KEY;
 
@@ -51,6 +57,7 @@ export async function webSearch(query: string): Promise<SearchResult[]> {
 
   const url = new URL(ENDPOINT);
   url.searchParams.set("q", query);
+  url.searchParams.set("num", String(RESULTS_PER_QUERY));
 
   let response: Response;
   try {

@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ProgressTracker } from "@/components/progress-tracker";
 import { ReportCard } from "@/components/report-card";
 import { SourceList } from "@/components/source-list";
+import { AttemptList } from "@/components/attempt-list";
 import { AppFooter } from "@/components/footer";
 import {
   isTerminalStatus,
@@ -116,6 +117,10 @@ export default function ResearchSessionPage() {
         ) : null}
 
         {data.sources.length > 0 ? <SourceList sources={data.sources} /> : null}
+
+        {isDone && data.attempts.length > 0 ? (
+          <AttemptList attempts={data.attempts} />
+        ) : null}
       </main>
 
       <AppFooter />

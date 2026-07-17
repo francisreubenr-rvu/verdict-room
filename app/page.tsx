@@ -34,7 +34,7 @@ const PROBLEM_CARDS = [
 const PIPELINE_STEPS = [
   { n: 1, label: "QUEUED", copy: "Accepts the mission. Stretches." },
   { n: 2, label: "SEARCHING", copy: "Casts a wide net across YouTube, Reddit, the open web." },
-  { n: 3, label: "FETCHING", copy: "Opens up to 50 tabs so you don't have to." },
+  { n: 3, label: "FETCHING", copy: "Opens dozens of tabs so you don't have to — up to 50 on Pro." },
   { n: 4, label: "EXTRACTING", copy: "Finds the sentences that matter. Flags the paid ones." },
   { n: 5, label: "SYNTHESIZING", copy: "Argues with itself until one verdict wins." },
 ];

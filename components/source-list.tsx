@@ -77,7 +77,19 @@ function SourceCard({
         />
       </div>
 
-      {source.summary ? (
+      {source.platform === "youtube" && source.reviewDraft ? (
+        <>
+          <p className="mt-2.5 font-serif text-sm leading-relaxed text-foreground">
+            {source.reviewDraft}
+          </p>
+          {source.groundednessConfidence !== null && source.groundednessConfidence < 0.6 ? (
+            <p className="mt-1.5 font-mono text-[10px] tracking-wide text-muted-foreground">
+              ⚠ low confidence — this video&apos;s transcript was thin or unclear (
+              {Math.round(source.groundednessConfidence * 100)}% grounded)
+            </p>
+          ) : null}
+        </>
+      ) : source.summary ? (
         <p className="mt-2.5 font-serif text-sm leading-relaxed text-foreground">
           {source.summary}
         </p>

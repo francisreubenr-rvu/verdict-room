@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { createClient } from "@/lib/supabase/server";
 import { generateSearchQueries } from "@/lib/llm";
 import { webSearch, youtubeSearch, SearchProviderError } from "@/lib/research/search";
+import { detectPlatform } from "@/lib/research/extract";
 import { dispatchInternal, internalHeaders, internalUrl } from "@/lib/internal-pipeline";
 import { STALE_SESSION_MS, TERMINAL_STATUSES } from "@/components/research-types";
 import {
@@ -76,6 +77,14 @@ export async function GET() {
 // degrades to "fewer sources from YouTube alone" instead of a hard failure — this is the actual
 // payoff of not relying on a single source finder (user request, 2026-07-15). A direct Reddit
 // search route was evaluated and dropped — see lib/research/search.ts for why (live 403s).
+//
+// youtubeSearch runs once per query (capped) instead of once per session — changed 2026-07-16:
+// firing it only once against a single hardcoded "<product> review" string was a second driver
+// of the source-count collapse (PLAN.md's own YouTube discovery route contributing almost
+// nothing to the total). Capped rather than run against all 3-10 generated queries to bound
+// the extra unauthenticated-fetch volume against YouTube's own rate/bot-detection tolerance.
+const YOUTUBE_QUERY_CAP = 3;
+
 async function discoverSources(
   queries: string[],
   productTerm: string
@@ -100,11 +109,15 @@ async function discoverSources(
     // Fall through — youtubeSearch may still contribute below.
   }
 
-  const ytResults = await youtubeSearch(`${productTerm} review`);
-  for (const result of ytResults) {
-    if (!seen.has(result.url)) {
-      seen.add(result.url);
-      urls.push(result.url);
+  const ytQueries =
+    queries.length > 0 ? queries.slice(0, YOUTUBE_QUERY_CAP) : [`${productTerm} review`];
+  const ytBatches = await Promise.all(ytQueries.map((q) => youtubeSearch(q)));
+  for (const batch of ytBatches) {
+    for (const result of batch) {
+      if (!seen.has(result.url)) {
+        seen.add(result.url);
+        urls.push(result.url);
+      }
     }
   }
 
@@ -155,7 +168,7 @@ async function continueSearch(
   let queryParseFailed = false;
 
   try {
-    const result = await generateSearchQueries(query);
+    const result = await generateSearchQueries(query, plan);
     queries = result.queries;
     parsed = result.parsed;
   } catch {
@@ -188,7 +201,14 @@ async function continueSearch(
     return;
   }
 
-  urls = urls.slice(0, sourceCapForPlan(plan));
+  // Keep the full discovered list — the cap-slice below is what gets dispatched immediately,
+  // but the overflow (candidates that didn't make the cut) is persisted as "discovered"
+  // SourceAttempt rows so the backfill step in process-source/route.ts has real replacement
+  // candidates when a dispatched source fails, instead of just shrinking expectedSources.
+  const allUrls = urls;
+  const dispatchUrls = allUrls.slice(0, sourceCapForPlan(plan));
+  const overflowUrls = allUrls.slice(sourceCapForPlan(plan));
+  urls = dispatchUrls;
 
   // The fast quota check in POST (before this tail started) is a cheap early-exit for the common
   // case only — it doesn't close the race between concurrent requests from the same user, since
@@ -223,6 +243,27 @@ async function continueSearch(
       data: { parsed, status: "fetching", expectedSources: urls.length, failureReason: null },
     });
   }
+
+  // The audit trail behind the "every site we checked" transparency panel — one row per
+  // discovered URL, not just the ones that end up as a linked Source. skipDuplicates guards
+  // the @@unique([sessionId, url]) constraint even though discoverSources already dedupes.
+  await prisma.sourceAttempt.createMany({
+    data: [
+      ...dispatchUrls.map((url) => ({
+        sessionId,
+        url,
+        platform: detectPlatform(url),
+        status: "dispatched" as const,
+      })),
+      ...overflowUrls.map((url) => ({
+        sessionId,
+        url,
+        platform: detectPlatform(url),
+        status: "discovered" as const,
+      })),
+    ],
+    skipDuplicates: true,
+  });
 
   urls.forEach((url, index) => {
     const target = internalUrl(`/api/research/${sessionId}/process-source`, request);
