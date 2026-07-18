@@ -72,6 +72,7 @@ export type FailureReason =
   | "search_unavailable"
   | "no_results"
   | "all_sources_failed"
+  | "no_findings"
   | "synthesis_failed"
   | "timed_out"
   | "quota_exceeded";
@@ -81,6 +82,8 @@ export const FAILURE_MESSAGES: Record<FailureReason, string> = {
   search_unavailable: "Search is temporarily unavailable. Please try again shortly.",
   no_results: "No sources found for that query. Try being more specific.",
   all_sources_failed: "Every source we found failed to load. Please try again.",
+  no_findings:
+    "We read the sources but couldn't extract usable review content. Please try a more specific query.",
   synthesis_failed: "We gathered sources but couldn't finish the report. Please try again.",
   timed_out: "This is taking too long. Please try again.",
   quota_exceeded: "You're out of free reports this month. Upgrade to Pro for unlimited reports.",

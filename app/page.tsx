@@ -270,7 +270,7 @@ export default function LandingPage() {
                   Kick the tires.
                 </div>
                 <p className="mt-2 font-serif text-[15px] leading-relaxed text-muted-foreground">
-                  3 reports a month, full source lists, every paid voice labeled. Enough to never
+                  10 reports a month, full source lists, every paid voice labeled. Enough to never
                   trust a listicle again.
                 </p>
               </div>

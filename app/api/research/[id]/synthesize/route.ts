@@ -50,6 +50,19 @@ export async function POST(
     }))
   );
 
+  // Every dispatched source can succeed (sourceCount > 0, so process-source's own
+  // all_sources_failed check never fires) while none of them extracted any findings —
+  // extractAndClassify/extractYoutubeReview can legitimately return findings: []. Synthesizing
+  // an empty findings array produces a content-free "done" report that still burns a monthly
+  // quota slot and blocks the 24h duplicate-retry window, so treat it as a failure instead.
+  if (findings.length === 0) {
+    await prisma.researchSession.updateMany({
+      where: { id: sessionId, status: "synthesizing" },
+      data: { status: "failed", failureReason: "no_findings" },
+    });
+    return NextResponse.json({ ok: true, skipped: true });
+  }
+
   try {
     const result = await synthesize({
       sessionQuery: session.query,

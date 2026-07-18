@@ -88,7 +88,20 @@ export default function ResearchSessionPage() {
       FAILURE_MESSAGES[data.failureReason as FailureReason] ??
       "Research failed, try again.";
     return (
-      <CenteredMessage message={message} linkLabel="Start a new search" />
+      <div className="flex flex-1 flex-col">
+        <main className="mx-auto flex w-full max-w-[880px] flex-1 flex-col items-center gap-9 px-4 py-20 sm:px-6">
+          <div className="flex flex-col items-center gap-5 text-center">
+            <p className="font-serif text-lg text-foreground">{message}</p>
+            <Link href="/app" className={buttonVariants({ size: "lg" })}>
+              Start a new search
+            </Link>
+          </div>
+          {data.attempts.length > 0 ? (
+            <AttemptList attempts={data.attempts} />
+          ) : null}
+        </main>
+        <AppFooter />
+      </div>
     );
   }
 

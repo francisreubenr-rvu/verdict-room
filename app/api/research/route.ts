@@ -35,14 +35,44 @@ export async function GET() {
   // Reap any of this user's sessions that lost a waitUntil hop before listing — otherwise a
   // stuck session's badge reads "Fetching…" indefinitely with no way for the client to know to
   // stop treating it as in-progress (A1/E6).
-  await prisma.researchSession.updateMany({
+  const staleCutoff = new Date(Date.now() - STALE_SESSION_MS);
+  const staleSessions = await prisma.researchSession.findMany({
     where: {
       userId: user.id,
       status: { notIn: TERMINAL_STATUSES },
-      updatedAt: { lt: new Date(Date.now() - STALE_SESSION_MS) },
+      updatedAt: { lt: staleCutoff },
     },
-    data: { status: "failed", failureReason: "timed_out" },
+    select: { id: true },
   });
+
+  if (staleSessions.length > 0) {
+    const staleIds = staleSessions.map((s) => s.id);
+    // The updateMany repeats the full staleness condition, not just the ids — a session can
+    // legitimately complete (or resume progressing, refreshing updatedAt) in the gap after the
+    // findMany above, and an id-only update would clobber its real terminal status back to
+    // failed/timed_out (Round 2 roast finding).
+    await prisma.researchSession.updateMany({
+      where: {
+        id: { in: staleIds },
+        status: { notIn: TERMINAL_STATUSES },
+        updatedAt: { lt: staleCutoff },
+      },
+      data: { status: "failed", failureReason: "timed_out" },
+    });
+    // Same reap, closing out any attempt row still stuck at "dispatched"/"discovered" for the
+    // sessions just flipped to failed — otherwise the transparency panel shows phantom pending
+    // sources for a session that's already terminal (see app/api/research/[id]/route.ts GET).
+    // The relation filter scopes this to sessions the reap actually flipped (or that were
+    // already failed) — a session that escaped the reap by completing keeps its attempt rows.
+    await prisma.sourceAttempt.updateMany({
+      where: {
+        sessionId: { in: staleIds },
+        status: { in: ["dispatched", "discovered"] },
+        session: { status: "failed" },
+      },
+      data: { status: "failed", failureReason: "session_ended" },
+    });
+  }
 
   const [sessions, plan, used] = await Promise.all([
     prisma.researchSession.findMany({
@@ -215,11 +245,13 @@ async function continueSearch(
   // the LLM parse + search calls above take several seconds. Re-check under an advisory lock,
   // scoped to just this check + the status flip (not the search work above, which would hold the
   // lock far too long for no benefit), so at most FREE_MONTHLY_REPORT_LIMIT sessions that
-  // actually dispatch work land per user per month (S4 finding).
+  // actually dispatch work land per user per month (S4 finding). excludeSessionId omits this
+  // session's own row — it already exists (status "searching"/"fetching") by the time this
+  // re-check runs, so without the exclusion it counts against its own limit.
   if (plan === "free") {
     const flipped = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${userId}, 0))`;
-      const used = await countReportsThisMonth(userId, tx);
+      const used = await countReportsThisMonth(userId, tx, sessionId);
       if (used >= FREE_MONTHLY_REPORT_LIMIT) {
         return false;
       }

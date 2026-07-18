@@ -53,6 +53,13 @@ export async function GET(
     if (reaped.count > 0) {
       status = "failed";
       failureReason = "timed_out";
+      // The session is now terminal but any attempt row still in flight (a process-source call
+      // that never landed) would otherwise be stuck at "dispatched"/"discovered" forever — close
+      // those out too so the transparency panel doesn't show phantom pending sources.
+      await prisma.sourceAttempt.updateMany({
+        where: { sessionId: session.id, status: { in: ["dispatched", "discovered"] } },
+        data: { status: "failed", failureReason: "session_ended" },
+      });
     }
   }
 

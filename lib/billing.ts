@@ -41,15 +41,26 @@ export function startOfCurrentMonth(): Date {
 // Accepts an optional transaction client so the POST /api/research quota re-check (which must
 // run inside the advisory-lock transaction to actually close the race, see S4) can reuse the
 // exact same counting logic instead of drifting from this definition over time.
+//
+// excludeSessionId lets a re-check called after the current session row already exists (see
+// continueSearch) omit that row from its own count — otherwise a session counts against its own
+// limit and every free user tops out one report short of FREE_MONTHLY_REPORT_LIMIT (Round 1
+// BLOCKER finding).
 export async function countReportsThisMonth(
   userId: string,
-  client: Pick<typeof prisma, "researchSession"> = prisma
+  client: Pick<typeof prisma, "researchSession"> = prisma,
+  excludeSessionId?: string
 ): Promise<number> {
   // Failed sessions (search provider down, no results, every source unfetchable, synthesis
   // error) produced nothing for the user — counting them against the monthly cap or returning
   // them as a "duplicate" would punish the user for an infrastructure failure, not their usage.
   return client.researchSession.count({
-    where: { userId, createdAt: { gte: startOfCurrentMonth() }, status: { not: "failed" } },
+    where: {
+      userId,
+      createdAt: { gte: startOfCurrentMonth() },
+      status: { not: "failed" },
+      ...(excludeSessionId ? { id: { not: excludeSessionId } } : {}),
+    },
   });
 }
 
