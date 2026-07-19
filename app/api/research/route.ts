@@ -170,6 +170,28 @@ async function discoverSources(
 // since the whole point of the higher source cap is actually gathering that many sources.
 const DISPATCH_STAGGER_MS = 2500;
 
+// Platform-priority dispatch (2026-07-19 incident fix, see SOURCING-PLAN.md): YouTube transcript
+// fetch is IP-blocked from Vercel in production (InnerTube returns LOGIN_REQUIRED "Sign in to
+// confirm you're not a bot" on every client profile, confirmed 2026-07-19) and Reddit needs a
+// paid Browserbase tier we don't have — web is the only platform reliably fetchable from prod
+// right now. Discovery skews ~60% YouTube, so without prioritization the plan's dispatch cap (and
+// the backfill overflow pool) end up dominated by doomed URLs. Web still gets tried first, then
+// youtube, then reddit last — the doomed URLs still get tried and show honestly in the
+// transparency panel, they just don't eat the cap ahead of sources that can actually succeed.
+const PLATFORM_DISPATCH_PRIORITY: Record<ReturnType<typeof detectPlatform>, number> = {
+  web: 0,
+  youtube: 1,
+  reddit: 2,
+};
+
+// Array.prototype.sort is spec-guaranteed stable (ES2019+) — ties (same platform) keep their
+// original discovery order, so this reorders platform groups without shuffling within a group.
+function sortByPlatformPriority(urls: string[]): string[] {
+  return [...urls].sort(
+    (a, b) => PLATFORM_DISPATCH_PRIORITY[detectPlatform(a)] - PLATFORM_DISPATCH_PRIORITY[detectPlatform(b)]
+  );
+}
+
 // The actual search + dispatch work, run as a detached tail via waitUntil so the client gets the
 // session id (and can start polling/rendering real "queued"/"searching" progress) immediately
 // instead of waiting several seconds for the LLM parse + search calls to finish synchronously
@@ -230,6 +252,10 @@ async function continueSearch(
     });
     return;
   }
+
+  // Sort before slicing to the cap so web sources claim the dispatch cap first — see
+  // PLATFORM_DISPATCH_PRIORITY above for why.
+  urls = sortByPlatformPriority(urls);
 
   // Keep the full discovered list — the cap-slice below is what gets dispatched immediately,
   // but the overflow (candidates that didn't make the cut) is persisted as "discovered"

@@ -99,3 +99,42 @@ rationale lives in the plan this checkpoint was created from — this file exist
   code review/deploy of `scripts/` additions since those were deleted after use.
   Deploying these changes to Vercel (`/ship`) has not happened — everything above was
   verified locally against the live database only.
+
+## 2026-07-19 — Production incident: session reaped `timed_out` despite 10 good sources
+
+A real user session finished with 10 sources successfully processed but still ended
+up reaped as `status="failed", failureReason="timed_out"`. Diagnosis confirmed from
+production DB + Vercel runtime logs (not re-derived, taken as given for this fix):
+
+1. **508 LOOP_DETECTED on backfill.** `process-source/route.ts`'s bounded backfill
+   re-dispatched a fresh POST to its own route via `dispatchInternal` on every
+   claimed replacement candidate. Chains of failures (common once discovery is
+   dominated by doomed YouTube URLs — see #2) accumulated Vercel's function-
+   invocation recursion depth until the platform started rejecting the hop outright
+   with a 508. A rejected hop left its `SourceAttempt` stuck at `"dispatched"`
+   forever and `expectedSources` never reconciled down, so the `sourceCount >=
+   expectedSources` completion check could never fire — the session just ran out
+   the `STALE_SESSION_MS` clock and got reaped.
+2. **YouTube transcript fetch is IP-blocked from Vercel in production.** InnerTube
+   returns `LOGIN_REQUIRED` ("Sign in to confirm you're not a bot") on every client
+   profile from Vercel's IPs. Discovery is ~60% YouTube URLs, so both the plan's
+   dispatch cap and the backfill overflow pool were dominated by URLs that were
+   never going to succeed, no matter how much backfill capacity existed. No code fix
+   beats an IP block — the fix is prioritization (send web URLs first), not repair.
+3. **Groq 429 retries ignored `retry-after`.** `lib/llm.ts`'s `withRateLimitRetry`
+   waited a flat ~1.5s once regardless of the actual `retry-after` header (2-38s
+   observed), so recoverable rate-limit hits failed permanently against a longer
+   reset window.
+
+### Fixes shipped this session
+
+| # | Fix | File(s) |
+|---|---|---|
+| 1 | Hop-loss reconciler — client-polled `GET` reaps `SourceAttempt` rows stuck at `"dispatched"` past `ATTEMPT_STALE_MS` (3 min), decrements `expectedSources`, and re-runs the completion check (fail `all_sources_failed` or dispatch synthesize) so a session with lost hops can still finish instead of hanging to `timed_out`. | `app/api/research/[id]/route.ts`, `components/research-types.ts` (new `ATTEMPT_STALE_MS`), `components/attempt-list.tsx` (new `hop_lost` label) |
+| 2 | Killed the recursive backfill dispatch — the primary URL's fetch/extract/persist logic was factored into `processOneUrl()`, reused inline for at most one backfill candidate per invocation instead of firing another POST at the route. No more self-dispatch chain, no more 508. | `app/api/research/[id]/process-source/route.ts` |
+| 3 | Platform-priority dispatch — discovered URLs are stably sorted web-first/youtube/reddit-last before the cap slice in `continueSearch`, and the backfill claim query orders by `platform desc` (web first, per the schema's `youtube < reddit < web` enum declaration order) so doomed URLs stop eating the cap ahead of URLs that can actually succeed. | `app/api/research/route.ts`, `app/api/research/[id]/process-source/route.ts` |
+| 4 | Groq `retry-after` honored — reads the real header (falls back to parsing "try again in Xs" from the message, else 5s), waits `min(retryAfter + jitter, 40s)`, allows up to 2 retries instead of 1. | `lib/llm.ts` |
+| 5 | Session liveness touch — `processOneUrl()` bumps the parent session's `updatedAt` after every processed URL (success or failure) so a session actively grinding through a Groq-throttled tail of slow successes isn't mistaken for dead and reaped at the 10-minute `STALE_SESSION_MS` mark. | `app/api/research/[id]/process-source/route.ts` |
+
+`bun run lint` and `bun run build` both green after all five fixes. Not deployed —
+this session did not commit, push, or run `prisma db push` per instruction.

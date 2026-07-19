@@ -166,20 +166,59 @@ export async function generateSearchQueries(
   return { queries: input.queries.slice(0, maxQueries), parsed: input.parsed };
 }
 
+// Groq's 429s carry a real `retry-after` header (2-38s observed in production, 2026-07-19 incident
+// — see SOURCING-PLAN.md) driven by the token-window reset, not a flat "try again shortly." A
+// fixed ~1.5s wait is useless against a 38s reset — the retry just fails again. Read the real
+// wait off the error and honor it (capped) instead of guessing.
+const FALLBACK_RETRY_DELAY_MS = 5000;
+const MAX_RETRY_DELAY_MS = 40 * 1000;
+
+function retryAfterMsFromError(err: unknown): number {
+  // The openai SDK's APIError exposes the raw response `headers` (a standard `Headers` object) —
+  // mirrors how `status` is read below defensively, since a non-APIError thrown value won't have
+  // either property.
+  const headers = (err as { headers?: Headers } | null)?.headers;
+  const headerValue = headers?.get?.("retry-after");
+  if (headerValue) {
+    const seconds = Number(headerValue);
+    if (Number.isFinite(seconds) && seconds >= 0) {
+      return seconds * 1000;
+    }
+  }
+
+  // Defensive fallback: Groq's 429 error message body also states the wait inline (e.g. "Please
+  // try again in 38.5s") — parse it when the header is missing or unparseable.
+  const message = (err as { message?: string } | null)?.message ?? "";
+  const match = message.match(/try again in ([\d.]+)\s*(ms|s)?/i);
+  if (match) {
+    const value = Number(match[1]);
+    const unit = (match[2] ?? "s").toLowerCase();
+    if (Number.isFinite(value)) {
+      return unit === "ms" ? value : value * 1000;
+    }
+  }
+
+  return FALLBACK_RETRY_DELAY_MS;
+}
+
 // Used by both extractAndClassify (up to 50 calls for a Pro session, staggered ~1.2s apart —
 // see DISPATCH_STAGGER_MS in app/api/research/route.ts) and synthesize (once per session, but
 // its prompt scales with source count too). Only retries 429 (genuine transient rate limiting) —
 // deliberately not 413 "Request too large": that means the request itself is oversized, and
-// retrying the identical payload would just fail identically. A single bounded retry after a
-// short backoff lets a 429 clear instead of permanently failing that source/session.
+// retrying the identical payload would just fail identically. Up to 2 retries (3 attempts total),
+// each waiting the real retry-after window (plus a little jitter, capped at 40s) instead of a
+// single flat guess — see retryAfterMsFromError above.
 async function withRateLimitRetry<T>(fn: () => Promise<T>): Promise<T> {
-  try {
-    return await fn();
-  } catch (err) {
-    const status = (err as { status?: number } | null)?.status;
-    if (status !== 429) throw err;
-    await new Promise((resolve) => setTimeout(resolve, 1500 + Math.random() * 1000));
-    return fn();
+  const MAX_RETRIES = 2;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const status = (err as { status?: number } | null)?.status;
+      if (status !== 429 || attempt >= MAX_RETRIES) throw err;
+      const waitMs = Math.min(retryAfterMsFromError(err) + 1000 + Math.random() * 1000, MAX_RETRY_DELAY_MS);
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    }
   }
 }
 

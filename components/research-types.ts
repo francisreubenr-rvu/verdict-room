@@ -99,6 +99,21 @@ export function isStale(status: string, updatedAt: Date): boolean {
   return !isTerminalStatus(status) && Date.now() - updatedAt.getTime() > STALE_SESSION_MS;
 }
 
+// A "dispatched" SourceAttempt untouched for this long means its process-source invocation
+// either died in flight or was rejected outright before it could persist any further progress —
+// e.g. Vercel's 508 LOOP_DETECTED recursion-depth rejection on a backfill chain (2026-07-19
+// incident, see SOURCING-PLAN.md). The clock starts at dispatch-queue time (row creation) but is
+// reset by process-source's invocation-start touch, so for a hop that actually began running it
+// measures silence since the invocation proved it exists — a hop whose dispatch was rejected
+// (the 508 case) never gets that touch and correctly stays on the creation clock. The reconciler
+// in GET /api/research/[id] additionally requires the whole session to have gone quiet before
+// acting on this, so a busy session's legitimate stragglers (Groq retry-after waits can run
+// minutes) aren't written off mid-flight. Distinct from STALE_SESSION_MS (which reaps the whole
+// session): this reaps a single lost hop so the session's own completion check (sourceCount >=
+// expectedSources) can still fire instead of the whole session running out the clock and getting
+// reaped as "timed_out" despite most of its sources having actually succeeded.
+export const ATTEMPT_STALE_MS = 3 * 60 * 1000;
+
 export interface ResearchSessionResponse {
   id: string;
   query: string;

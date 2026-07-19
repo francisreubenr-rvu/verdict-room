@@ -19,6 +19,7 @@ const FAILURE_LABELS: Record<string, string> = {
   blocked: "blocked by the site",
   extraction_error: "couldn't process the content",
   session_ended: "session ended before this finished",
+  hop_lost: "lost in transit — replaced or written off",
 };
 
 function statusBadge(attempt: ResearchAttempt) {
