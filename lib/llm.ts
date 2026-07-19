@@ -525,12 +525,31 @@ export type SynthesisFinding = {
  * cost/policy table, sponsored/affiliate findings are NOT counted toward consensus ranking —
  * they are surfaced separately in the verdict as a "what sponsored sources said" note.
  */
+export type SynthesizedOption = {
+  name: string;
+  score: number;
+  pros: string[];
+  cons: string[];
+  rank: number;
+  // Budget honesty (2026-07-19 brief): true only when this option's typical price genuinely
+  // exceeds the shopper's stated budget — false whenever no budget was stated at all.
+  overBudget: boolean;
+  // Approximate price plus its relation to the stated budget (e.g. "$549, over your $500
+  // budget"), or "" when the findings gave no price evidence for this option.
+  priceNote: string;
+  // Finding URLs that support this option — validated below against the findings actually sent
+  // to the model, so a hallucinated URL can never reach the client.
+  sourceUrls: string[];
+};
+
+const MAX_SOURCE_URLS_PER_OPTION = 6;
+
 export async function synthesize(input: {
   sessionQuery: string;
   parsed: ParsedQuery;
   findings: SynthesisFinding[];
 }): Promise<{
-  options: Array<{ name: string; score: number; pros: string[]; cons: string[]; rank: number }>;
+  options: SynthesizedOption[];
   verdict: string;
 }> {
   const toolName = "emit_synthesis";
@@ -572,7 +591,7 @@ export async function synthesize(input: {
         function: {
           name: toolName,
           description:
-            "Emit a canonicalized, ranked list of product options synthesized from organic findings, plus a plain-language verdict that separately notes what sponsored/affiliate sources said.",
+            "Emit a canonicalized, ranked list of product options synthesized from organic findings, plus a plain-language verdict that separately notes what sponsored/affiliate sources said. Options priced beyond the shopper's stated budget may still be included when genuinely compelling — but every such option MUST be flagged overBudget with a priceNote explaining the gap. Never mix an over-budget option in unmarked alongside in-budget ones.",
           parameters: {
             type: "object",
             properties: {
@@ -588,8 +607,24 @@ export async function synthesize(input: {
                     pros: { type: "array", items: { type: "string" } },
                     cons: { type: "array", items: { type: "string" } },
                     rank: { type: "integer", description: "1-indexed rank, 1 is best." },
+                    overBudget: {
+                      type: "boolean",
+                      description:
+                        "Strictly whether this option's typical price, as evidenced in the findings, exceeds the shopper's stated budget from the parsed query. False when no budget was stated.",
+                    },
+                    priceNote: {
+                      type: "string",
+                      description:
+                        "The option's approximate price as stated in the findings, plus its relation to the budget, e.g. \"$549, over your $500 budget\" or \"$89, within budget\". Empty string if no price evidence exists in the findings for this option.",
+                    },
+                    sourceUrls: {
+                      type: "array",
+                      description:
+                        "The url values of the findings that support THIS specific option — copy them exactly from the findings provided below, do not invent or alter URLs. Deduplicated.",
+                      items: { type: "string" },
+                    },
                   },
-                  required: ["name", "score", "pros", "cons", "rank"],
+                  required: ["name", "score", "pros", "cons", "rank", "overBudget", "priceNote", "sourceUrls"],
                 },
               },
               verdict: {
@@ -611,10 +646,15 @@ export async function synthesize(input: {
           `Shopper query: "${input.sessionQuery}"`,
           `Parsed: product="${input.parsed.product}", useCase="${input.parsed.useCase}", budget="${input.parsed.budget}"`,
           "",
-          `Organic findings (${organicFindings.length}) — use these to rank options and build pros/cons:`,
+          input.parsed.budget
+            ? `Budget check REQUIRED: the shopper stated a budget of "${input.parsed.budget}". For every option, set overBudget=true and write a priceNote (e.g. "$549, over your ${input.parsed.budget} budget") whenever the findings' price evidence puts it above that budget. An over-budget option may still be ranked and included if it's genuinely the best answer — but it must never be presented unmarked. Options within budget get overBudget=false and a priceNote like "$89, within budget" when price evidence exists.`
+            : `No budget was stated — set overBudget=false for every option. Still fill priceNote with price evidence from the findings when present, else "".`,
+          "For every option, set sourceUrls to the url values (copied exactly, not invented) of the findings below that support that specific option.",
+          "",
+          `Organic findings (${organicFindings.length}) — use these to rank options, build pros/cons, and populate priceNote/sourceUrls:`,
           JSON.stringify(organicFindings, null, 2),
           "",
-          `Sponsored/affiliate findings (${nonOrganicFindings.length}) — do NOT use these to rank options; only reference them in the verdict's separate sponsored-sources note:`,
+          `Sponsored/affiliate findings (${nonOrganicFindings.length}) — do NOT use these to rank options; only reference them in the verdict's separate sponsored-sources note (their urls may still back a sourceUrls entry if they support an option's price):`,
           JSON.stringify(nonOrganicFindings, null, 2),
         ].join("\n"),
       },
@@ -622,8 +662,25 @@ export async function synthesize(input: {
     })
   );
 
-  return parseForcedToolCall<{
-    options: Array<{ name: string; score: number; pros: string[]; cons: string[]; rank: number }>;
+  const parsed = parseForcedToolCall<{
+    options: SynthesizedOption[];
     verdict: string;
   }>(response.choices[0].message, toolName, "synthesize");
+
+  // Guard against invention: a forced tool call is reliable about *shape*, not about whether the
+  // model copied a real url or fabricated one. Only URLs that actually appear among the findings
+  // it was shown are allowed through — everything else (typos, hallucinated domains) is dropped
+  // rather than silently trusted, since these render as real outbound links in the product card.
+  const knownUrls = new Set(
+    [...organicFindings, ...nonOrganicFindings].map((f) => f.url).filter(Boolean)
+  );
+  const options = parsed.options.map((o) => ({
+    ...o,
+    sourceUrls: Array.from(new Set((o.sourceUrls ?? []).filter((u) => knownUrls.has(u)))).slice(
+      0,
+      MAX_SOURCE_URLS_PER_OPTION
+    ),
+  }));
+
+  return { options, verdict: parsed.verdict };
 }

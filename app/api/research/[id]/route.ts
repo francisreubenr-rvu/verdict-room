@@ -154,6 +154,7 @@ export async function GET(
     summary: source.summary,
     reviewDraft: source.reviewDraft,
     groundednessConfidence: source.groundednessConfidence,
+    transcript: source.transcript,
   }));
 
   const attempts = attemptRows.map((attempt) => ({

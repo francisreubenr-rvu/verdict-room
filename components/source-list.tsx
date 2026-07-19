@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ExternalLink, Globe, MessageSquare, SquarePlay } from "lucide-react";
+import { ChevronDown, ExternalLink, Globe, MessageSquare, SquarePlay } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -41,6 +41,34 @@ function SponsorshipBadge({
       {sponsorship ?? "unclassified"}
       {confidenceLabel}
     </Badge>
+  );
+}
+
+// Youtube source cards with a fetched transcript (2026-07-19 brief: "transcripts need to be made
+// public and visible") get an expandable toggle below the reviewDraft — collapsed by default so
+// the card list stays scannable, a button (not a div onclick) for keyboard/screen-reader access.
+function TranscriptToggle({ transcript }: { transcript: string }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="mt-2.5">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex items-center gap-1 font-mono text-[10.5px] font-semibold tracking-wide text-primary"
+      >
+        <ChevronDown className={cn("size-3 transition-transform", open && "rotate-180")} />
+        {open ? "HIDE TRANSCRIPT" : "VIEW TRANSCRIPT"}
+      </button>
+      {open ? (
+        <div className="mt-2 max-h-[300px] overflow-y-auto rounded-xl bg-well p-3 shadow-[var(--shadow-well)]">
+          <p className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-muted-foreground">
+            {transcript}
+          </p>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -93,6 +121,10 @@ function SourceCard({
         <p className="mt-2.5 font-serif text-sm leading-relaxed text-foreground">
           {source.summary}
         </p>
+      ) : null}
+
+      {source.platform === "youtube" && source.transcript ? (
+        <TranscriptToggle transcript={source.transcript} />
       ) : null}
 
       <a

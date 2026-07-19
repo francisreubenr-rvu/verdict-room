@@ -170,26 +170,33 @@ async function discoverSources(
 // since the whole point of the higher source cap is actually gathering that many sources.
 const DISPATCH_STAGGER_MS = 2500;
 
-// Platform-priority dispatch (2026-07-19 incident fix, see SOURCING-PLAN.md): YouTube transcript
-// fetch is IP-blocked from Vercel in production (InnerTube returns LOGIN_REQUIRED "Sign in to
-// confirm you're not a bot" on every client profile, confirmed 2026-07-19) and Reddit needs a
-// paid Browserbase tier we don't have — web is the only platform reliably fetchable from prod
-// right now. Discovery skews ~60% YouTube, so without prioritization the plan's dispatch cap (and
-// the backfill overflow pool) end up dominated by doomed URLs. Web still gets tried first, then
-// youtube, then reddit last — the doomed URLs still get tried and show honestly in the
-// transparency panel, they just don't eat the cap ahead of sources that can actually succeed.
-const PLATFORM_DISPATCH_PRIORITY: Record<ReturnType<typeof detectPlatform>, number> = {
-  web: 0,
-  youtube: 1,
-  reddit: 2,
-};
-
-// Array.prototype.sort is spec-guaranteed stable (ES2019+) — ties (same platform) keep their
-// original discovery order, so this reorders platform groups without shuffling within a group.
+// Platform-priority dispatch (originally 2026-07-19 incident fix, see SOURCING-PLAN.md; revised
+// 2026-07-19 product-experience brief). YouTube transcript fetch used to be a doomed URL from
+// Vercel in production (InnerTube's LOGIN_REQUIRED IP block) so the original fix pushed web
+// strictly ahead of youtube to keep the dispatch cap from being dominated by failures. YouTube is
+// production-viable again now that a failed InnerTube fetch falls back to a Browserbase
+// real-browser session (lib/research/fetch/youtube-browserbase.ts) — so it earns back a fair
+// share of the cap instead of being starved behind every web URL. Reddit still needs a paid
+// Browserbase tier we don't have, so it stays last, doomed or not. Web and YouTube are now
+// interleaved (web, youtube, web, youtube, ...) rather than strictly ordered — web stays
+// co-equal since it's cheaper and faster (no browser session at all), but neither platform
+// gets to eat the whole cap ahead of the other.
 function sortByPlatformPriority(urls: string[]): string[] {
-  return [...urls].sort(
-    (a, b) => PLATFORM_DISPATCH_PRIORITY[detectPlatform(a)] - PLATFORM_DISPATCH_PRIORITY[detectPlatform(b)]
-  );
+  const byPlatform = { web: [] as string[], youtube: [] as string[], reddit: [] as string[] };
+  for (const url of urls) {
+    byPlatform[detectPlatform(url)].push(url);
+  }
+
+  const interleaved: string[] = [];
+  const maxLen = Math.max(byPlatform.web.length, byPlatform.youtube.length);
+  for (let i = 0; i < maxLen; i++) {
+    if (i < byPlatform.web.length) interleaved.push(byPlatform.web[i]);
+    if (i < byPlatform.youtube.length) interleaved.push(byPlatform.youtube[i]);
+  }
+  // Reddit last, in its original discovery order — never interleaved in.
+  interleaved.push(...byPlatform.reddit);
+
+  return interleaved;
 }
 
 // The actual search + dispatch work, run as a detached tail via waitUntil so the client gets the
@@ -253,8 +260,8 @@ async function continueSearch(
     return;
   }
 
-  // Sort before slicing to the cap so web sources claim the dispatch cap first — see
-  // PLATFORM_DISPATCH_PRIORITY above for why.
+  // Sort before slicing to the cap so web/youtube interleave and reddit falls to the back before
+  // the cap-slice — see sortByPlatformPriority above for why.
   urls = sortByPlatformPriority(urls);
 
   // Keep the full discovered list — the cap-slice below is what gets dispatched immediately,

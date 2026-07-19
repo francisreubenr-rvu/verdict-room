@@ -122,6 +122,7 @@ model Source {
   summary           String?
   reviewDraft       String?      // youtube only — synthesized per-video review paragraph
   groundednessConfidence Float?  // youtube only — how well pain/good points are supported by the transcript
+  transcript        String?      // youtube only — the fetched transcript text (truncated to ~60K chars), rendered expandably in the source list
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt  // drives the 30-day freshness check in §3 step 2
   sessions          SessionSource[]
@@ -142,15 +143,19 @@ model Finding {
 }
 
 model Option {
-  id        String   @id @default(cuid())
-  sessionId String
-  session   ResearchSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  name      String
-  score     Float
-  pros      String[]
-  cons      String[]
-  rank      Int
-  createdAt DateTime @default(now())
+  id         String   @id @default(cuid())
+  sessionId  String
+  session    ResearchSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  name       String
+  score      Float
+  pros       String[]
+  cons       String[]
+  rank       Int
+  overBudget Boolean  @default(false) // true when the option's price exceeds the query's stated budget — surfaced as an explicit flag, never silently included
+  priceNote  String?                  // short free text: the option's price and its relation to the budget (e.g. "$549 — over your $500 budget")
+  sourceUrls String[]                 // the source pages (from this session's findings) that support this option — the user's path to direct product/source data
+  imageUrl   String?                  // lazily-fetched product image, cached here on first product-card open (see /api/product-image)
+  createdAt  DateTime @default(now())
 
   @@index([sessionId])
 }

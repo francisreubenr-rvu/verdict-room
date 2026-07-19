@@ -84,28 +84,51 @@ export async function POST(
         Number.isInteger(o.rank)
     );
 
-    await prisma.$transaction([
+    // createMany doesn't return the created rows, and the client-facing verdictJson needs each
+    // option's row id (so the product card can call /product-image) — create individually inside
+    // an interactive transaction instead, then fold the ids straight into verdictJson in the same
+    // transaction so the Option rows and the session's verdictJson stay consistent even if this
+    // route dies partway through (matches the original single-transaction guarantee).
+    const optionData = options.map((o) => ({
+      sessionId,
+      name: o.name,
+      score: o.score,
+      pros: o.pros,
+      cons: o.cons,
+      rank: o.rank,
+      overBudget: o.overBudget ?? false,
+      // Empty string from the model means "no price evidence" — store null, not "".
+      priceNote: o.priceNote ? o.priceNote : null,
+      sourceUrls: o.sourceUrls ?? [],
+    }));
+
+    await prisma.$transaction(async (tx) => {
       // Defense-in-depth alongside the status="synthesizing" guard above: even if this route
       // somehow runs twice for one session, the second pass replaces rather than duplicates.
-      prisma.option.deleteMany({ where: { sessionId } }),
-      prisma.option.createMany({
-        data: options.map((o) => ({
-          sessionId,
-          name: o.name,
-          score: o.score,
-          pros: o.pros,
-          cons: o.cons,
-          rank: o.rank,
-        })),
-      }),
-      prisma.researchSession.update({
+      await tx.option.deleteMany({ where: { sessionId } });
+      const created = await Promise.all(optionData.map((data) => tx.option.create({ data })));
+
+      const verdictOptions = created.map((row) => ({
+        name: row.name,
+        score: row.score,
+        pros: row.pros,
+        cons: row.cons,
+        rank: row.rank,
+        overBudget: row.overBudget,
+        priceNote: row.priceNote,
+        sourceUrls: row.sourceUrls,
+        imageUrl: row.imageUrl,
+        id: row.id,
+      }));
+
+      await tx.researchSession.update({
         where: { id: sessionId },
         data: {
-          verdictJson: { options, verdict: result.verdict },
+          verdictJson: { options: verdictOptions, verdict: result.verdict },
           status: "done",
         },
-      }),
-    ]);
+      });
+    });
 
     return NextResponse.json({ ok: true });
   } catch (err) {

@@ -15,6 +15,10 @@ import {
 // last outstanding source for the session and — if so — kick off synthesize.
 const FRESHNESS_WINDOW_MS = 30 * 24 * 60 * 60 * 1000; // 30 days, per PLAN.md §3 step 2
 
+// Bounds Source.transcript row size — transcripts beyond this are truncated, not rejected, so an
+// unusually long video still lands a (large but bounded) transcript instead of failing the write.
+const TRANSCRIPT_MAX_CHARS = 60_000;
+
 // Best-effort failure classification for the transparency panel. `processSource`'s fetch layer
 // deliberately returns null rather than a reason (see lib/research/fetch/*.ts) so this can't be
 // exact, but platform is a solid proxy for *why* right now: Reddit's unauthenticated JSON access
@@ -77,6 +81,13 @@ async function processOneUrl(
       const result = await processSource(url);
 
       if (result) {
+        // youtube only — see Source.transcript in prisma/schema.prisma. Truncated at persist
+        // time (TRANSCRIPT_MAX_CHARS above) rather than at fetch time so the LLM classification
+        // step above still sees the full transcript passed through processSource/extractYoutubeReview's
+        // own (smaller) MAX_CONTENT_CHARS cap — this cap only bounds what gets stored.
+        const transcript =
+          result.platform === "youtube" ? result.content.slice(0, TRANSCRIPT_MAX_CHARS) : null;
+
         const source = await prisma.source.upsert({
           where: { url },
           create: {
@@ -88,6 +99,7 @@ async function processOneUrl(
             summary: result.summary,
             reviewDraft: result.reviewDraft,
             groundednessConfidence: result.groundednessConfidence,
+            transcript,
           },
           update: {
             platform: result.platform,
@@ -97,6 +109,7 @@ async function processOneUrl(
             summary: result.summary,
             reviewDraft: result.reviewDraft,
             groundednessConfidence: result.groundednessConfidence,
+            transcript,
           },
         });
 
@@ -242,9 +255,13 @@ export async function POST(
     // can't loop indefinitely if the overflow pool is being claimed by many concurrent failures.
     //
     // Preferring web candidates (platform desc — youtube < reddit < web in the schema's enum
-    // declaration order, see prisma/schema.prisma) mirrors the priority-dispatch rationale in
-    // app/api/research/route.ts: YouTube is IP-blocked from Vercel in production and Reddit needs
-    // a paid Browserbase tier, so a web candidate is the one actually likely to succeed.
+    // declaration order, see prisma/schema.prisma) is left as a simple tiebreak, not full
+    // interleaving like app/api/research/route.ts's dispatch-cap sort: web stays cheapest and
+    // fastest (no browser session at all) and Reddit still needs a paid Browserbase tier, but
+    // YouTube is production-viable again via the Browserbase fallback (lib/research/fetch/
+    // youtube-browserbase.ts) — a claimed YouTube candidate is no longer a doomed slot, just a
+    // slower one, so preferring web here is a mild optimization rather than the load-bearing
+    // "skip the URLs that can't work at all" logic it used to be.
     //
     // Accounting invariant (read this before touching the logic below): the failed primary URL
     // owns exactly one expectedSources slot. Claim at most ONE candidate and process it ONCE —

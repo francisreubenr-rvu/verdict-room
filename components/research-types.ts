@@ -31,6 +31,19 @@ export interface ResearchOption {
   pros: string[];
   cons: string[];
   rank: number;
+  // Budget honesty (2026-07-19 brief): an option priced beyond the query's stated budget is
+  // still shown (it may genuinely be the best answer) but must carry this explicit flag and a
+  // price note — never presented unmarked alongside in-budget options.
+  overBudget: boolean;
+  priceNote: string | null;
+  // Source pages (from this session's findings) supporting this option — the user's path from
+  // a ranked result to the direct source data behind it.
+  sourceUrls: string[];
+  // Lazily fetched + cached product image (see /api/product-image); null until first card open
+  // or when no image could be found.
+  imageUrl: string | null;
+  // Option row id — needed by the product card to request/persist the image cache.
+  id: string | null;
 }
 
 export interface VerdictJson {
@@ -48,6 +61,9 @@ export interface ResearchSource {
   summary: string | null;
   reviewDraft: string | null;
   groundednessConfidence: number | null;
+  // youtube only — the fetched transcript (truncated at persist time), rendered expandably on
+  // the source card (2026-07-19 brief: "transcripts need to be made public and visible").
+  transcript: string | null;
 }
 
 export type AttemptStatus = "discovered" | "dispatched" | "succeeded" | "failed";

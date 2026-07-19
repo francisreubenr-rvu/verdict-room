@@ -121,6 +121,7 @@ export default function ResearchSessionPage() {
 
         {isDone && data.verdictJson ? (
           <ReportCard
+            sessionId={data.id}
             query={data.query}
             verdictJson={data.verdictJson}
             sourceCount={data.sources.length}

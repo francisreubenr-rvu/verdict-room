@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import type { VerdictJson } from "@/components/research-types";
 
 interface ReportCardProps {
+  sessionId: string;
   query: string;
   verdictJson: VerdictJson;
   sourceCount: number;
@@ -21,6 +22,7 @@ function formatDuration(createdAt: string, updatedAt: string): string {
 }
 
 export function ReportCard({
+  sessionId,
   query,
   verdictJson,
   sourceCount,
@@ -61,7 +63,7 @@ export function ReportCard({
         </div>
       </div>
 
-      <Verdict verdict={verdictJson.verdict} options={verdictJson.options} />
+      <Verdict sessionId={sessionId} verdict={verdictJson.verdict} options={verdictJson.options} />
     </div>
   );
 }

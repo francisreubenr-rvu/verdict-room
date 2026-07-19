@@ -138,3 +138,27 @@ production DB + Vercel runtime logs (not re-derived, taken as given for this fix
 
 `bun run lint` and `bun run build` both green after all five fixes. Not deployed —
 this session did not commit, push, or run `prisma db push` per instruction.
+
+(Deployed 2026-07-19 as commit cba62bc — the "not deployed" line above predates the ship.)
+
+## 2026-07-19 — Product-experience brief (5 deliverables)
+
+User-reported after testing the stall fixes live:
+
+| # | Deliverable | Status |
+|---|---|---|
+| 1 | YouTube transcript fetch working IN PRODUCTION — via Browserbase real-browser fallback (feasibility-proven: 9,892 chars extracted from a live video's transcript panel; Browserbase egresses from its own infra, not Vercel's blocked IPs) | Done — `lib/research/fetch/youtube-browserbase.ts` (new), `lib/research/fetch/youtube.ts` chains InnerTube then Browserbase. Live-tested against a real video: 8,105 chars of clean prose extracted (author not found on this particular video, best-effort per spec). |
+| 2 | Budget-constraint flagging — options priced beyond the user's stated budget must carry an explicit "over budget" flag/note in synthesis output and UI, never presented unmarked | Done — `emit_synthesis` tool schema now requires `overBudget`/`priceNote`/`sourceUrls` per option (`lib/llm.ts`), persisted on `Option` rows and embedded in `verdictJson` (`synthesize/route.ts`), rendered as a destructive-variant "OVER BUDGET" badge + price note on the ranked row (`components/verdict.tsx`). |
+| 3 | Per-option source links — each ranked option links out to the source pages that support it, so users can reach the product's direct source data | Done — `sourceUrls` validated against real finding URLs and capped at 6 per option in `synthesize()`; rendered as hostname-labeled outbound links in the product card. |
+| 4 | Product cards — clicking a result row opens a card: product details, pros/cons, price/budget note, source links, and a product image (fetched from a free image source, cached) | Done — ranked rows are now buttons opening `components/product-card.tsx` (base-ui `Dialog` added via `bunx shadcn add dialog`, restyled to the clay system); image lazily fetched via new `POST /api/research/[id]/product-image` (Bing image-search scrape, cached on `Option.imageUrl`, graceful null on any failure — parse logic live-verified against two real product names before wiring in). |
+| 5 | YouTube transcripts public and visible — persist the transcript on the Source row and render it expandably on YouTube source cards | Done — persisted in `app/api/research/[id]/process-source/route.ts` (TRANSCRIPT_MAX_CHARS 60K), exposed via `app/api/research/[id]/route.ts` GET, rendered as a collapsed-by-default "VIEW TRANSCRIPT" toggle in `components/source-list.tsx`. |
+
+Design decisions locked in:
+- YouTube fetch order: InnerTube library first (free, works locally and if YouTube ever
+  unblocks Vercel), Browserbase second (costs session minutes — mitigated by the 30-day
+  Source cache making each video a one-time fetch across all users).
+- Discovery priority becomes web/youtube interleaved (reddit still last) now that YouTube
+  is viable in production again.
+- Product images: lazily fetched on first card open via a new authed API route (Bing
+  image scrape, graceful null fallback), persisted on the Option row as a cache.
+- Feasibility script: scripts/test-yt-browserbase.ts (delete before ship).
