@@ -16,17 +16,29 @@
 // Changed 2026-07-19: InnerTube is confirmed 100% IP-blocked from Vercel in production — every
 // client profile in the library's fallback chain returns LOGIN_REQUIRED ("Sign in to confirm
 // you're not a bot"), a bot-check tied to Vercel's IP ranges, not a bug in this client. No code
-// fix beats an IP block, so `fetchYoutubeTranscript` now chains to a Browserbase real-browser
+// fix beats an IP block, so `fetchYoutubeTranscript` chained to a Browserbase real-browser
 // session (`fetchYoutubeTranscriptViaBrowser`, lib/research/fetch/youtube-browserbase.ts) when
-// InnerTube comes back null — Browserbase egresses from its own infra, not Vercel's, and is what
-// actually lands YouTube transcripts in production. InnerTube stays first because it's free and
-// instant when it works (local dev, or if YouTube ever unblocks Vercel's IPs) — Browserbase costs
-// session minutes, mitigated by the 30-day Source cache making each video a one-time fetch.
+// InnerTube came back null — Browserbase egresses from its own infra, not Vercel's, and was what
+// actually landed YouTube transcripts in production at the time.
+//
+// Changed 2026-07-23: InnerTube's Vercel IP block is still confirmed live, and on top of that the
+// Browserbase fallback was found to crash at Stagehand init in production ("unable to determine
+// transport target for 'pino-pretty'" — see next.config.ts's serverExternalPackages for the
+// fix), so it was carrying nothing either. Added a third path,
+// `fetchYoutubeTranscriptViaExternal` (lib/research/fetch/youtube-external.ts), which hits
+// kome.ai's transcript API: it fetches from YouTube on kome's own infrastructure over plain
+// HTTP, so Vercel's IP block is irrelevant and no browser session is needed. This is now
+// LIVE-CONFIRMED WORKING and carries production. The chain is reordered to
+// external -> InnerTube -> browser: external goes first because it's the one that actually
+// works from Vercel; InnerTube stays second as a free, instant path for local dev (or if
+// YouTube ever unblocks Vercel's IPs); the Browserbase session is the costly last resort, now
+// also fixed by the pino-pretty config change but still the most expensive option.
 
 import { getSubtitles } from "youtube-caption-extractor";
 import { fetchYoutubeTranscriptViaBrowser } from "@/lib/research/fetch/youtube-browserbase";
+import { fetchYoutubeTranscriptViaExternal } from "@/lib/research/fetch/youtube-external";
 
-function extractVideoId(url: string): string | null {
+export function extractVideoId(url: string): string | null {
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -105,13 +117,22 @@ async function fetchViaInnerTube(
 export async function fetchYoutubeTranscript(
   url: string
 ): Promise<{ content: string; author: string | null } | null> {
+  // External (kome.ai) first — see file header, this is the path confirmed to actually work from
+  // Vercel in production.
+  const viaExternal = await fetchYoutubeTranscriptViaExternal(url);
+  if (viaExternal) {
+    return viaExternal;
+  }
+
+  // InnerTube second — free and instant when it works (local dev, or if YouTube ever unblocks
+  // Vercel's IPs), but confirmed IP-blocked in production as of 2026-07-19 (see file header).
   const viaInnerTube = await fetchViaInnerTube(url);
   if (viaInnerTube) {
     return viaInnerTube;
   }
 
-  // InnerTube found nothing — either genuinely no captions, or (the common production case, see
-  // file header) the Vercel IP block. Either way, the Browserbase real-browser session is worth
-  // trying before giving up on this source entirely.
+  // Both free paths came back empty — either genuinely no transcript exists, or every provider
+  // is blocked. The Browserbase real-browser session is the costly last resort before giving up
+  // on this source entirely.
   return fetchYoutubeTranscriptViaBrowser(url);
 }

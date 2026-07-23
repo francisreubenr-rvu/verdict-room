@@ -162,3 +162,37 @@ Design decisions locked in:
 - Product images: lazily fetched on first card open via a new authed API route (Bing
   image scrape, graceful null fallback), persisted on the Option row as a cache.
 - Feasibility script: scripts/test-yt-browserbase.ts (delete before ship).
+
+## 2026-07-23 — YouTube STILL dead in production: real root cause + external-service fix
+
+The 2026-07-19 Browserbase-fallback ship did NOT land a single YouTube transcript in
+production. Live diagnosis (get_runtime_errors on dpl_6ejP..., the current prod deploy,
+which already carries BROWSERBASE_API_KEY via a redeploy) found the actual cause:
+
+| Path | Prod result | Root cause |
+|---|---|---|
+| InnerTube (`youtube-caption-extractor`) | 48× fail | YouTube IP-blocks Vercel: `LOGIN_REQUIRED, Sign in to confirm you're not a bot` on every client profile. Not a bug in our client. |
+| Browserbase browser session | 48× crash at init (YouTube) + 14× (Reddit) | Stagehand's internal `pino` logger throws `unable to determine transport target for "pino-pretty"` inside the webpack serverless bundle. The browser session NEVER runs. Local feasibility worked only because pino-pretty resolves from local node_modules. |
+
+So the env var was never the blocker — Stagehand dies before it opens a browser, and it
+takes Reddit down with it.
+
+Fix (per the standing goal: "use external sites/sources or YouTube itself"):
+1. NEW `lib/research/fetch/youtube-external.ts` — a provider chain hitting kome.ai's
+   free transcript API (`POST https://kome.ai/api/transcript` `{video_id, format:true}`
+   -> `{transcript, length, hasMore, isPremium}`). Fetches on kome's own infra, so
+   Vercel's YouTube IP block is irrelevant. LIVE-VERIFIED against the exact videos that
+   failed in prod: Z-wIGXluoug (Sony, 15.6K chars, hasMore:false) and -XrB-97lO1Q
+   (Kodak). Returns clean prose, better for LLM extraction than caption fragments.
+2. `lib/research/fetch/youtube.ts` chain reordered: external (kome) -> InnerTube ->
+   browser. External carries prod; InnerTube stays as a free local path; browser is the
+   last resort.
+3. `next.config.ts` `serverExternalPackages` for stagehand/pino/pino-pretty so webpack
+   stops bundling them and pino resolves its transport at runtime — fixes the crash for
+   BOTH the YouTube browser fallback and Reddit. Belt-and-suspenders: verbose:0 + a
+   plain logger passed to both Stagehand constructors.
+
+No schema change -> ships as a normal auto-deploy (which also re-confirms the env var).
+Kome path is verifiable locally (plain HTTP, identical behavior local vs Vercel); the
+pino fix is only verifiable in prod logs, acceptable because YouTube success now rides on
+kome, not on the browser fallback.

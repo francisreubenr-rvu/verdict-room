@@ -53,7 +53,17 @@ export async function fetchYoutubeTranscriptViaBrowser(
 
   let stagehand: Stagehand | null = null;
   try {
-    stagehand = new Stagehand({ env: "BROWSERBASE" });
+    // Belt-and-suspenders against the pino-pretty crash (see next.config.ts's
+    // serverExternalPackages, which is the actual fix): verbose/logger/disablePino are all real
+    // options on Stagehand 3.7.0's V3Options (node_modules/@browserbasehq/stagehand/dist/esm/lib/v3/types/public/options.d.ts) —
+    // verbose:0 silences internal log emission, logger replaces the default pino-backed sink
+    // with a plain function, and disablePino turns off the pino backend outright.
+    stagehand = new Stagehand({
+      env: "BROWSERBASE",
+      verbose: 0,
+      logger: () => {},
+      disablePino: true,
+    });
     await stagehand.init();
     const page = await stagehand.context.newPage(url);
     await page.waitForLoadState("load", 20_000).catch(() => {});
