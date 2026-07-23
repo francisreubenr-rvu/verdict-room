@@ -567,7 +567,12 @@ export async function synthesize(input: {
   // 6-8. Cutting to 40/180 closed most of the gap but a second live run still overshot by a
   // smaller margin ("Requested 8282"). Cut again to 32/150 for real margin instead of nickel-
   // and-diming this against paid API calls on every iteration.
-  const MAX_FINDINGS = 32;
+  // Reduced 32 -> 24 (2026-07-23): the synthesis prompt scales with total findings, and a smaller
+  // prompt both eases Groq's 8000 TPM admission after the extraction storm and gives the model
+  // fewer distinct products to want to enumerate (the emit_synthesis output is capped at 5 options
+  // below, but a shorter candidate list makes it converge on the strongest ones instead of
+  // truncating a long one).
+  const MAX_FINDINGS = 24;
   const MAX_FIELD_CHARS = 150;
   const truncate = (s: string) => (s.length > MAX_FIELD_CHARS ? `${s.slice(0, MAX_FIELD_CHARS)}…` : s);
   const shrink = (f: SynthesisFinding): SynthesisFinding => ({
@@ -604,16 +609,16 @@ export async function synthesize(input: {
                 // (Groq 400 tool_use_failed -> the session's synthesize step failed -> no verdict
                 // rendered despite dozens of gathered sources). A focused ranked shortlist is also
                 // better UX for a purchase decision than an exhaustive dump.
-                maxItems: 8,
+                maxItems: 5,
                 description:
-                  "At most the 8 strongest canonical product options, deduplicated from the free-text option mentions in the findings, ranked best to worst based on organic findings only. Prefer a focused shortlist over an exhaustive list.",
+                  "At most the 5 strongest canonical product options, deduplicated from the free-text option mentions in the findings, ranked best to worst based on organic findings only. Emit a tight shortlist of the best answers, NOT every product mentioned across the findings.",
                 items: {
                   type: "object",
                   properties: {
                     name: { type: "string", description: "Canonical product/model name." },
                     score: { type: "number", description: "Relative score, higher is better." },
-                    pros: { type: "array", maxItems: 4, description: "Up to 4 concise pros, roughly 60 characters each.", items: { type: "string" } },
-                    cons: { type: "array", maxItems: 4, description: "Up to 4 concise cons, roughly 60 characters each.", items: { type: "string" } },
+                    pros: { type: "array", maxItems: 3, description: "Up to 3 concise pros, roughly 55 characters each.", items: { type: "string" } },
+                    cons: { type: "array", maxItems: 3, description: "Up to 3 concise cons, roughly 55 characters each.", items: { type: "string" } },
                     rank: { type: "integer", description: "1-indexed rank, 1 is best." },
                     overBudget: {
                       type: "boolean",
@@ -658,6 +663,7 @@ export async function synthesize(input: {
           input.parsed.budget
             ? `Budget check REQUIRED: the shopper stated a budget of "${input.parsed.budget}". For every option, set overBudget=true and write a priceNote (e.g. "$549, over your ${input.parsed.budget} budget") whenever the findings' price evidence puts it above that budget. An over-budget option may still be ranked and included if it's genuinely the best answer — but it must never be presented unmarked. Options within budget get overBudget=false and a priceNote like "$89, within budget" when price evidence exists.`
             : `No budget was stated — set overBudget=false for every option. Still fill priceNote with price evidence from the findings when present, else "".`,
+          "Emit AT MOST 5 ranked options — the strongest shortlist for the shopper, not every product mentioned in the findings.",
           "For every option, set sourceUrls to the url values (copied exactly, not invented) of the findings below that support that specific option.",
           "",
           `Organic findings (${organicFindings.length}) — use these to rank options, build pros/cons, and populate priceNote/sourceUrls:`,

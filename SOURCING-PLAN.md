@@ -256,3 +256,13 @@ With this + the reap-synthesis + reconciler, the pipeline now delivers a verdict
 whatever it gathers even under the Groq free-tier 429 tail. The 8000 TPM limit still caps
 how MANY sources a 50-source Pro query can fully process (many extraction 429s) - that
 remains a tier/cap decision, but a verdict now renders regardless.
+
+## 2026-07-23 (cont. 3) — Synthesis bound was still too loose; tighten decisively
+
+First bound (options maxItems 8, pros/cons 4) still truncated: get_runtime_errors showed
+the model emitting 6+ verbose options and running out of max_tokens 2500 mid-JSON (Groq
+400 tool_use_failed again), with the TPM bucket also near-drained (remaining 453). Tightened
+to a real top-5 shortlist: options maxItems 5, pros/cons maxItems 3 (~55 chars), plus an
+explicit "emit AT MOST 5" prompt line, and MAX_FINDINGS 32 -> 24 to shrink the prompt (eases
+TPM admission after the extraction storm and gives the model fewer products to enumerate).
+Output now ~1200-1700 tokens, well under max_tokens 2500 even if the model overshoots.
