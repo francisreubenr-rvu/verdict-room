@@ -300,3 +300,19 @@ no prompt/tool/model change; Groq stays the fallback). .env.local.example docume
 Activation (user): get a free key at build.nvidia.com (no card), add NVIDIA_API_KEY to .env.local
 and Vercel production, redeploy. Then re-verify a verdict renders. All the YouTube/transparency
 work is unaffected and already proven.
+
+## 2026-07-23 (cont. 6) — NVIDIA NIM free tier does not serve inference (reverted to Groq)
+
+Tried the NVIDIA switch live. gpt-oss-120b hung at the first call (generateSearchQueries) for
+18+ min in production; switched the NVIDIA path to meta/llama-3.3-70b-instruct, which ALSO hung
+(~5 min, no progress). Verbose curl characterized it: TLS connects and the POST /v1/chat/completions
+request sends fully, but NVIDIA returns 0 bytes (no response) for every model, both locally and
+from Vercel, while GET /v1/models works. So NVIDIA's free-tier chat-completions endpoint accepts
+requests but never returns inference for this account (free-tier queue/credits issue on their side,
+not our code/network). The pipeline stalled at "searching" the whole time.
+
+Reverted: provider selection is now gated on an explicit LLM_PROVIDER=nvidia opt-in (was mere key
+presence), so Groq (fast LPU) is the default again and production works. The NVIDIA path stays
+wired up for a future working provider. The verdict-rendering bottleneck remains Groq's free 8000
+TPM on synthesize(); durable fixes: paid Groq Dev tier (keeps fast inference), or a fast-inference
+free alternative like Cerebras/SambaNova, or lower the source cap so synthesis fits.
