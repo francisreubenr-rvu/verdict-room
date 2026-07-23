@@ -36,11 +36,17 @@ function getLlm(): OpenAI {
   return client;
 }
 
-// openai/gpt-oss-120b — an open-weight reasoning model with native tool-use/function-calling,
-// hosted on BOTH providers this file can target (Groq and NVIDIA NIM) under the same id, so the
-// provider switch above needs no model change. Groq's free tier is 8K tokens/min (the synthesize
-// bottleneck); NVIDIA's free tier is ~40 req/min with no comparable per-minute token cap.
-const MODEL = "openai/gpt-oss-120b";
+// Model per provider. Groq serves openai/gpt-oss-120b fast on its LPU. NVIDIA's free tier serves
+// that same 120B *reasoning* model far too slowly to use in this pipeline: a single
+// generateSearchQueries call hung past the function budget in production (2026-07-23), because the
+// model emits a long chain-of-thought before the forced tool call and NVIDIA's GPU free tier
+// queues it. So on NVIDIA we use meta/llama-3.3-70b-instruct instead — a fast, non-reasoning model
+// with native tool/function-calling, so the same OpenAI-style forced-tool-call prompts work
+// unchanged. NVIDIA's free tier is request-rate limited (~40 req/min) with no tight per-minute
+// token cap, which is what makes the large synthesize() call admit where Groq's 8K TPM does not.
+const MODEL = process.env.NVIDIA_API_KEY
+  ? "meta/llama-3.3-70b-instruct"
+  : "openai/gpt-oss-120b";
 
 export type ParsedQuery = {
   product: string;
