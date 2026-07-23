@@ -14,42 +14,35 @@ import OpenAI from "openai";
 // .env.local. Matches lib/stripe.ts's getStripe() pattern.
 let client: OpenAI | undefined;
 
-// Env-driven LLM provider. Both Groq and NVIDIA NIM are OpenAI-compatible, so switching is a
-// base-URL + key (+ model) swap. Selection is gated on an EXPLICIT LLM_PROVIDER=nvidia opt-in, not
-// mere key presence: NVIDIA NIM's free-tier chat-completions endpoint accepted the request but
-// never returned a response for this account (every model hung past the serverless function budget
-// on 2026-07-23, both locally and from Vercel — GET /v1/models worked, POST /v1/chat/completions
-// hung with 0 bytes back), which stalls the whole pipeline at "searching". So Groq (fast LPU
-// inference) stays the default and production keeps working; the NVIDIA path stays wired up for
-// when a working fast provider/tier is in place (set LLM_PROVIDER=nvidia + NVIDIA_API_KEY then).
-// Groq's own limit is the 8000 tokens/min free cap that starves the large synthesize() call — the
-// durable fix for that is a paid Groq tier (keeps the fast inference) or another fast provider.
-const useNvidia = process.env.LLM_PROVIDER === "nvidia" && !!process.env.NVIDIA_API_KEY;
+// Env-driven LLM provider, selected by LLM_PROVIDER (default groq). All are OpenAI-compatible, so
+// switching is a base-URL + key + model swap with identical forced-tool-call prompts. A provider is
+// used only when LLM_PROVIDER names it AND its key is set, so a stray key can't silently take over.
+// - groq (default): openai/gpt-oss-120b on Groq's fast LPU. Its only limit is the free 8000
+//   tokens/min cap, which starves the large synthesize() call after a session's extraction storm.
+// - cerebras: llama-3.3-70b on Cerebras' fast inference (~1800 tok/s). Free tier is 30 req/min and
+//   60K tokens/min (7.5x Groq's cap) plus 1M tokens/day, so the synthesis request admits
+//   comfortably. This is the intended fix for the verdict-rendering bottleneck (2026-07-23).
+// - nvidia: kept wired up but its free-tier chat-completions endpoint returned 0 bytes for every
+//   model for this account (hung the pipeline at "searching", 2026-07-23) — do not enable without
+//   re-confirming it actually responds.
+const PROVIDERS: Record<string, { baseURL: string; key: string | undefined; model: string }> = {
+  groq: { baseURL: "https://api.groq.com/openai/v1", key: process.env.GROQ_API_KEY, model: "openai/gpt-oss-120b" },
+  cerebras: { baseURL: "https://api.cerebras.ai/v1", key: process.env.CEREBRAS_API_KEY, model: "llama-3.3-70b" },
+  nvidia: { baseURL: "https://integrate.api.nvidia.com/v1", key: process.env.NVIDIA_API_KEY, model: "meta/llama-3.3-70b-instruct" },
+};
+const requested = process.env.LLM_PROVIDER ?? "groq";
+const ACTIVE_PROVIDER = PROVIDERS[requested]?.key ? requested : "groq";
 
 function getLlm(): OpenAI {
   if (!client) {
-    client = useNvidia
-      ? new OpenAI({
-          apiKey: process.env.NVIDIA_API_KEY,
-          baseURL: "https://integrate.api.nvidia.com/v1",
-        })
-      : new OpenAI({
-          apiKey: process.env.GROQ_API_KEY,
-          baseURL: "https://api.groq.com/openai/v1",
-        });
+    const p = PROVIDERS[ACTIVE_PROVIDER];
+    client = new OpenAI({ apiKey: p.key, baseURL: p.baseURL });
   }
   return client;
 }
 
-// Model per provider. Groq serves openai/gpt-oss-120b fast on its LPU. NVIDIA's free tier serves
-// that same 120B *reasoning* model far too slowly to use in this pipeline: a single
-// generateSearchQueries call hung past the function budget in production (2026-07-23), because the
-// model emits a long chain-of-thought before the forced tool call and NVIDIA's GPU free tier
-// queues it. So on NVIDIA we use meta/llama-3.3-70b-instruct instead — a fast, non-reasoning model
-// with native tool/function-calling, so the same OpenAI-style forced-tool-call prompts work
-// unchanged. NVIDIA's free tier is request-rate limited (~40 req/min) with no tight per-minute
-// token cap, which is what makes the large synthesize() call admit where Groq's 8K TPM does not.
-const MODEL = useNvidia ? "meta/llama-3.3-70b-instruct" : "openai/gpt-oss-120b";
+// Model is per-provider (see PROVIDERS above), so the provider switch needs no separate model logic.
+const MODEL = PROVIDERS[ACTIVE_PROVIDER].model;
 
 export type ParsedQuery = {
   product: string;
