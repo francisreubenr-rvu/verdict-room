@@ -10,25 +10,36 @@
 import OpenAI from "openai";
 
 // Lazy singleton — constructing eagerly at module load crashes Next.js's build-time page-data
-// collection (which imports every route module) when GROQ_API_KEY isn't set yet, e.g. no
+// collection (which imports every route module) when neither key is set yet, e.g. no
 // .env.local. Matches lib/stripe.ts's getStripe() pattern.
 let client: OpenAI | undefined;
 
-function getGroq(): OpenAI {
+// Env-driven LLM provider. Both Groq and NVIDIA NIM are OpenAI-compatible and both host
+// openai/gpt-oss-120b, so switching is purely a base-URL + key swap (no prompt/tool changes).
+// NVIDIA is preferred when NVIDIA_API_KEY is present: its free tier is request-rate limited
+// (~40 req/min) rather than Groq's tight 8000 tokens/min cap, and that TPM cap is what starves the
+// large synthesize() call once a session's extraction storm has drained the shared bucket
+// (2026-07-23 incident, see SOURCING-PLAN.md). Groq remains the fallback when only GROQ_API_KEY
+// is set, so this is a config-only switch with no behavior change until the NVIDIA key is added.
+function getLlm(): OpenAI {
   if (!client) {
-    client = new OpenAI({
-      apiKey: process.env.GROQ_API_KEY,
-      baseURL: "https://api.groq.com/openai/v1",
-    });
+    client = process.env.NVIDIA_API_KEY
+      ? new OpenAI({
+          apiKey: process.env.NVIDIA_API_KEY,
+          baseURL: "https://integrate.api.nvidia.com/v1",
+        })
+      : new OpenAI({
+          apiKey: process.env.GROQ_API_KEY,
+          baseURL: "https://api.groq.com/openai/v1",
+        });
   }
   return client;
 }
 
-// openai/gpt-oss-120b — Groq's own recommended replacement for the now-deprecated
-// llama-3.3-70b-versatile, with native tool-use/function-calling support. Free tier is rate-limited
-// (30 req/min, 1K req/day, 8K tokens/min, 200K tokens/day as of this writing) — worth knowing if
-// extract+classify calls (one per source, up to 15/50 per session — see lib/billing.ts's
-// FREE_SOURCE_CAP/PRO_SOURCE_CAP) start getting throttled.
+// openai/gpt-oss-120b — an open-weight reasoning model with native tool-use/function-calling,
+// hosted on BOTH providers this file can target (Groq and NVIDIA NIM) under the same id, so the
+// provider switch above needs no model change. Groq's free tier is 8K tokens/min (the synthesize
+// bottleneck); NVIDIA's free tier is ~40 req/min with no comparable per-minute token cap.
 const MODEL = "openai/gpt-oss-120b";
 
 export type ParsedQuery = {
@@ -100,7 +111,7 @@ export async function generateSearchQueries(
   const toolName = "emit_search_plan";
   const maxQueries = plan === "pro" ? 10 : 5;
 
-  const response = await getGroq().chat.completions.create({
+  const response = await getLlm().chat.completions.create({
     model: MODEL,
     max_tokens: 1024,
     tools: [
@@ -341,7 +352,7 @@ export async function extractAndClassify(input: {
     ],
   };
 
-  const response = await withRateLimitRetry(() => getGroq().chat.completions.create(requestOptions));
+  const response = await withRateLimitRetry(() => getLlm().chat.completions.create(requestOptions));
 
   const parsed = parseForcedToolCall<{
     findings: Finding[];
@@ -494,7 +505,7 @@ export async function extractYoutubeReview(input: {
     ],
   };
 
-  const response = await withRateLimitRetry(() => getGroq().chat.completions.create(requestOptions));
+  const response = await withRateLimitRetry(() => getLlm().chat.completions.create(requestOptions));
 
   const parsed = parseForcedToolCall<{
     findings: Finding[];
@@ -597,7 +608,7 @@ export async function synthesize(input: {
   const nonOrganicFindings = allNonOrganic.slice(0, Math.max(0, MAX_FINDINGS - organicFindings.length));
 
   const response = await withRateLimitRetry(() =>
-    getGroq().chat.completions.create({
+    getLlm().chat.completions.create({
     model: MODEL,
     // 2200 (2026-07-23): a top-5 shortlist with 3 pros/cons each outputs ~1500 tokens, so this
     // leaves margin against truncation while keeping the request's admission footprint

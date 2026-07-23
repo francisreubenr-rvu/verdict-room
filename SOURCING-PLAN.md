@@ -282,3 +282,21 @@ Standing conclusion on the 8000 TPM ceiling: these fixes make a verdict render r
 from whatever is gathered, but the free tier still can't fully PROCESS a 50-source Pro
 query (many extraction 429s trim it to ~20-30). Durable options remain the user's call:
 upgrade Groq to a paid tier, or lower the Pro source cap to ~15-20 to match 8000 TPM.
+
+## 2026-07-23 (cont. 5) — Escape the Groq 8000 TPM wall: env-driven NVIDIA NIM provider
+
+Five live sessions confirmed the verdict never renders because the synthesize() call cannot get
+admitted through Groq's free-tier 8000 tokens/min (even a 17-source session 429'd for 3 min
+straight after a bucket-recovery pause). All code-side levers were exhausted (top-5 output bound,
+patient 4x45s retry, smaller footprint) - it is a hard capacity wall, and 8000 TPM is org-wide so
+likely contended by other usage of the shared key.
+
+Fix (user's suggestion): switch the LLM provider to NVIDIA NIM (integrate.api.nvidia.com), which is
+OpenAI-compatible, hosts the SAME openai/gpt-oss-120b, and whose free tier is request-rate limited
+(~40 req/min) with no comparable per-minute token cap - so the large synthesis request admits.
+lib/llm.ts getLlm() now prefers NVIDIA when NVIDIA_API_KEY is set, else Groq (config-only switch,
+no prompt/tool/model change; Groq stays the fallback). .env.local.example documents the new key.
+
+Activation (user): get a free key at build.nvidia.com (no card), add NVIDIA_API_KEY to .env.local
+and Vercel production, redeploy. Then re-verify a verdict renders. All the YouTube/transparency
+work is unaffected and already proven.
