@@ -14,16 +14,21 @@ import OpenAI from "openai";
 // .env.local. Matches lib/stripe.ts's getStripe() pattern.
 let client: OpenAI | undefined;
 
-// Env-driven LLM provider. Both Groq and NVIDIA NIM are OpenAI-compatible and both host
-// openai/gpt-oss-120b, so switching is purely a base-URL + key swap (no prompt/tool changes).
-// NVIDIA is preferred when NVIDIA_API_KEY is present: its free tier is request-rate limited
-// (~40 req/min) rather than Groq's tight 8000 tokens/min cap, and that TPM cap is what starves the
-// large synthesize() call once a session's extraction storm has drained the shared bucket
-// (2026-07-23 incident, see SOURCING-PLAN.md). Groq remains the fallback when only GROQ_API_KEY
-// is set, so this is a config-only switch with no behavior change until the NVIDIA key is added.
+// Env-driven LLM provider. Both Groq and NVIDIA NIM are OpenAI-compatible, so switching is a
+// base-URL + key (+ model) swap. Selection is gated on an EXPLICIT LLM_PROVIDER=nvidia opt-in, not
+// mere key presence: NVIDIA NIM's free-tier chat-completions endpoint accepted the request but
+// never returned a response for this account (every model hung past the serverless function budget
+// on 2026-07-23, both locally and from Vercel — GET /v1/models worked, POST /v1/chat/completions
+// hung with 0 bytes back), which stalls the whole pipeline at "searching". So Groq (fast LPU
+// inference) stays the default and production keeps working; the NVIDIA path stays wired up for
+// when a working fast provider/tier is in place (set LLM_PROVIDER=nvidia + NVIDIA_API_KEY then).
+// Groq's own limit is the 8000 tokens/min free cap that starves the large synthesize() call — the
+// durable fix for that is a paid Groq tier (keeps the fast inference) or another fast provider.
+const useNvidia = process.env.LLM_PROVIDER === "nvidia" && !!process.env.NVIDIA_API_KEY;
+
 function getLlm(): OpenAI {
   if (!client) {
-    client = process.env.NVIDIA_API_KEY
+    client = useNvidia
       ? new OpenAI({
           apiKey: process.env.NVIDIA_API_KEY,
           baseURL: "https://integrate.api.nvidia.com/v1",
@@ -44,9 +49,7 @@ function getLlm(): OpenAI {
 // with native tool/function-calling, so the same OpenAI-style forced-tool-call prompts work
 // unchanged. NVIDIA's free tier is request-rate limited (~40 req/min) with no tight per-minute
 // token cap, which is what makes the large synthesize() call admit where Groq's 8K TPM does not.
-const MODEL = process.env.NVIDIA_API_KEY
-  ? "meta/llama-3.3-70b-instruct"
-  : "openai/gpt-oss-120b";
+const MODEL = useNvidia ? "meta/llama-3.3-70b-instruct" : "openai/gpt-oss-120b";
 
 export type ParsedQuery = {
   product: string;
