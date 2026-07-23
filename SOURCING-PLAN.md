@@ -229,3 +229,30 @@ Underlying throughput limit (NOT fixed here, user decision): Groq free tier 8000
 cannot process a 50-source Pro query without heavy 429s. Options: upgrade Groq to a paid
 tier (real fix), or lower the Pro source cap to what 8000 TPM sustains (~15-20). The
 synthesis-on-reap fix guarantees a verdict from whatever succeeds regardless.
+
+## 2026-07-23 (cont. 2) — Verdict finally renders: bound the synthesis tool-call output
+
+Re-verified the reap fix with a fresh Pro query ("best phone under $500 for photography
+and battery life", session cmrx903d7...): gathered 32 sources incl. 10 YouTube phone
+reviews (all with transcripts, grounded 0.94-0.97). The synthesis-aware reconciler fired
+correctly (wrote off 2 stuck hops, expected 34->32, linked 32 == 32, flipped to
+synthesizing) - so completion now works. But synthesize itself then failed
+`synthesis_failed`.
+
+Root cause (from get_runtime_errors on the synthesize route): NOT a rate limit. Groq 400
+`tool_use_failed: Failed to parse tool call arguments as JSON`, with failed_generation
+truncated mid-JSON at `{"options":[{"name":"Google"}`. The emit_synthesis `options` array
+had NO maxItems cap and unbounded pros/cons, so over 32 sources the model emitted a long
+options list and ran out of max_tokens (2000) mid-generation, producing unparseable JSON.
+Deterministic - retrying wouldn't help.
+
+Fix (lib/llm.ts synthesize): bound the tool-call output so it always fits max_tokens.
+options maxItems 8 (focused ranked shortlist, also better UX), pros/cons maxItems 4 with
+~60-char guidance, sourceUrls maxItems 4, max_tokens 2000 -> 2500. Same truncation class
+already fixed for extractAndClassify/extractYoutubeReview; synthesis was the one path still
+unbounded.
+
+With this + the reap-synthesis + reconciler, the pipeline now delivers a verdict from
+whatever it gathers even under the Groq free-tier 429 tail. The 8000 TPM limit still caps
+how MANY sources a 50-source Pro query can fully process (many extraction 429s) - that
+remains a tier/cap decision, but a verdict now renders regardless.

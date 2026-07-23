@@ -584,7 +584,9 @@ export async function synthesize(input: {
   const response = await withRateLimitRetry(() =>
     getGroq().chat.completions.create({
     model: MODEL,
-    max_tokens: 2000,
+    // Bumped 2000 -> 2500 (2026-07-23) for output headroom now that options/pros/cons are
+    // bounded below — prompt (~2K tokens) + this still sits well under the 8000 TPM admission.
+    max_tokens: 2500,
     tools: [
       {
         type: "function",
@@ -597,15 +599,21 @@ export async function synthesize(input: {
             properties: {
               options: {
                 type: "array",
+                // Bounded (2026-07-23): over many sources the model emitted a long options list and
+                // ran out of max_tokens mid-generation, truncating the emit_synthesis tool-call JSON
+                // (Groq 400 tool_use_failed -> the session's synthesize step failed -> no verdict
+                // rendered despite dozens of gathered sources). A focused ranked shortlist is also
+                // better UX for a purchase decision than an exhaustive dump.
+                maxItems: 8,
                 description:
-                  "Canonical product options, deduplicated from the free-text option mentions in the findings, ranked best to worst based on organic findings only.",
+                  "At most the 8 strongest canonical product options, deduplicated from the free-text option mentions in the findings, ranked best to worst based on organic findings only. Prefer a focused shortlist over an exhaustive list.",
                 items: {
                   type: "object",
                   properties: {
                     name: { type: "string", description: "Canonical product/model name." },
                     score: { type: "number", description: "Relative score, higher is better." },
-                    pros: { type: "array", items: { type: "string" } },
-                    cons: { type: "array", items: { type: "string" } },
+                    pros: { type: "array", maxItems: 4, description: "Up to 4 concise pros, roughly 60 characters each.", items: { type: "string" } },
+                    cons: { type: "array", maxItems: 4, description: "Up to 4 concise cons, roughly 60 characters each.", items: { type: "string" } },
                     rank: { type: "integer", description: "1-indexed rank, 1 is best." },
                     overBudget: {
                       type: "boolean",
@@ -619,8 +627,9 @@ export async function synthesize(input: {
                     },
                     sourceUrls: {
                       type: "array",
+                      maxItems: 4,
                       description:
-                        "The url values of the findings that support THIS specific option — copy them exactly from the findings provided below, do not invent or alter URLs. Deduplicated.",
+                        "At most 4 url values of the findings that support THIS specific option — copy them exactly from the findings provided below, do not invent or alter URLs. Deduplicated.",
                       items: { type: "string" },
                     },
                   },
