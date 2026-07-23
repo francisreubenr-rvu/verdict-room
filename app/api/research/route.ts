@@ -35,6 +35,14 @@ export async function GET() {
   // Reap any of this user's sessions that lost a waitUntil hop before listing — otherwise a
   // stuck session's badge reads "Fetching…" indefinitely with no way for the client to know to
   // stop treating it as in-progress (A1/E6).
+  //
+  // Synthesis-aware split (2026-07-23 incident: a stale-but-recoverable session with 22 linked
+  // sources was getting hard-failed here before the user ever opened it, pre-empting the
+  // per-session GET /api/research/[id] synthesis-on-reap path that would otherwise turn it into a
+  // real verdict). A stale session that already gathered usable sources is not a dead end — only
+  // a stale session with ZERO linked sources is. So this bulk reap must only hard-fail the
+  // zero-source set; sessions with sources are left non-terminal on purpose, for the per-session
+  // GET to pick up and synthesize the next time it's polled/opened.
   const staleCutoff = new Date(Date.now() - STALE_SESSION_MS);
   const staleSessions = await prisma.researchSession.findMany({
     where: {
@@ -47,31 +55,46 @@ export async function GET() {
 
   if (staleSessions.length > 0) {
     const staleIds = staleSessions.map((s) => s.id);
-    // The updateMany repeats the full staleness condition, not just the ids — a session can
-    // legitimately complete (or resume progressing, refreshing updatedAt) in the gap after the
-    // findMany above, and an id-only update would clobber its real terminal status back to
-    // failed/timed_out (Round 2 roast finding).
-    await prisma.researchSession.updateMany({
-      where: {
-        id: { in: staleIds },
-        status: { notIn: TERMINAL_STATUSES },
-        updatedAt: { lt: staleCutoff },
-      },
-      data: { status: "failed", failureReason: "timed_out" },
+
+    // Single grouped query (not N+1 counts) to find which of the stale candidates have at least
+    // one linked source — those are excluded from the fail-reap below.
+    const staleIdsWithSources = await prisma.sessionSource.groupBy({
+      by: ["sessionId"],
+      where: { sessionId: { in: staleIds } },
     });
-    // Same reap, closing out any attempt row still stuck at "dispatched"/"discovered" for the
-    // sessions just flipped to failed — otherwise the transparency panel shows phantom pending
-    // sources for a session that's already terminal (see app/api/research/[id]/route.ts GET).
-    // The relation filter scopes this to sessions the reap actually flipped (or that were
-    // already failed) — a session that escaped the reap by completing keeps its attempt rows.
-    await prisma.sourceAttempt.updateMany({
-      where: {
-        sessionId: { in: staleIds },
-        status: { in: ["dispatched", "discovered"] },
-        session: { status: "failed" },
-      },
-      data: { status: "failed", failureReason: "session_ended" },
-    });
+    const sourcedIds = new Set(staleIdsWithSources.map((row) => row.sessionId));
+    const failIds = staleIds.filter((id) => !sourcedIds.has(id));
+
+    if (failIds.length > 0) {
+      // The updateMany repeats the full staleness condition, not just the ids — a session can
+      // legitimately complete (or resume progressing, refreshing updatedAt) in the gap after the
+      // findMany above, and an id-only update would clobber its real terminal status back to
+      // failed/timed_out (Round 2 roast finding).
+      await prisma.researchSession.updateMany({
+        where: {
+          id: { in: failIds },
+          status: { notIn: TERMINAL_STATUSES },
+          updatedAt: { lt: staleCutoff },
+        },
+        data: { status: "failed", failureReason: "timed_out" },
+      });
+      // Same reap, closing out any attempt row still stuck at "dispatched"/"discovered" for the
+      // sessions just flipped to failed — otherwise the transparency panel shows phantom pending
+      // sources for a session that's already terminal (see app/api/research/[id]/route.ts GET).
+      // The relation filter scopes this to sessions the reap actually flipped (or that were
+      // already failed) — a session that escaped the reap by completing keeps its attempt rows.
+      await prisma.sourceAttempt.updateMany({
+        where: {
+          sessionId: { in: failIds },
+          status: { in: ["dispatched", "discovered"] },
+          session: { status: "failed" },
+        },
+        data: { status: "failed", failureReason: "session_ended" },
+      });
+    }
+    // staleIds that ARE in sourcedIds are intentionally untouched here — left non-terminal so
+    // GET /api/research/[id]'s stale-reap synthesis path can flip them to "synthesizing" and
+    // dispatch a real verdict from their linked sources the next time that session is polled.
   }
 
   const [sessions, plan, used] = await Promise.all([

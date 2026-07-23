@@ -196,3 +196,36 @@ No schema change -> ships as a normal auto-deploy (which also re-confirms the en
 Kome path is verifiable locally (plain HTTP, identical behavior local vs Vercel); the
 pino fix is only verifiable in prod logs, acceptable because YouTube success now rides on
 kome, not on the browser fallback.
+
+## 2026-07-23 (cont.) — Live verification + timed_out-with-sources completion fix
+
+Shipped e6e5bb3 (kome external + pino fix) to prod and ran a real Pro query live
+("best camera under $500 for photography and video", session cmrx7zq13...). Results:
+
+- YouTube transcripts LAND IN PRODUCTION for the first time ever: 9 YouTube sources,
+  every one with a real transcript (2.5K-15.6K chars) + review draft + groundedness
+  0.90-0.96, via kome.ai. Browser-verified: the VIEW TRANSCRIPT toggle shows the real
+  kome transcript text (word-for-word match to the standalone curl test).
+- Runtime logs on the new deploy: ZERO pino-pretty crashes, ZERO InnerTube LOGIN_REQUIRED.
+  Reddit's Browserbase session now initializes and runs (fails only on Browserbase Free
+  plan's own 429, not the old pino crash) - so the pino fix works for Reddit too.
+
+But the session ended `failed / timed_out` despite 22 usable sources (9 YT + 13 web).
+Root cause: Groq free-tier 8000 TPM 429 storm throttled the tail past STALE_SESSION_MS
+(10 min); the staleness reap in GET /api/research/[id] hard-fails and runs BEFORE the
+hop-loss reconciler, so it preempted the path that would have synthesized from the 22
+linked sources. The platform gathered 9 YouTube reviews and delivered nothing - the exact
+"This is taking too long" failure from the original brief.
+
+Fix (this commit): staleness reap is now synthesis-aware.
+- GET /api/research/[id]: on stale, close in-flight attempts, then if sourceCount > 0 flip
+  to synthesizing + dispatch synthesize (same race-guarded pattern as the reconciler);
+  only hard-fail timed_out when sourceCount == 0. Documented that the reconciler below
+  cannot double-dispatch (its lostHops query finds zero dispatched rows after the reap).
+- GET /api/research (list bulk reap): only hard-fails stale sessions with ZERO linked
+  sources; stale-with-sources sessions are left for the per-session synthesis-on-reap.
+
+Underlying throughput limit (NOT fixed here, user decision): Groq free tier 8000 TPM
+cannot process a 50-source Pro query without heavy 429s. Options: upgrade Groq to a paid
+tier (real fix), or lower the Pro source cap to what 8000 TPM sustains (~15-20). The
+synthesis-on-reap fix guarantees a verdict from whatever succeeds regardless.

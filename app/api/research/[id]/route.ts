@@ -45,25 +45,62 @@ export async function GET(
   // A session stuck in a non-terminal status past the staleness window almost certainly lost a
   // waitUntil hop — reap it here so the client's poll loop terminates instead of running forever
   // (A1 finding).
+  //
+  // Synthesis-aware reap (2026-07-23 incident: a 22-source session went stale/timed_out on the
+  // Groq free-tier 429 tail and delivered nothing). A session that went stale after gathering
+  // linked sources is not a dead end — the whole point of the pipeline is to deliver a verdict
+  // from whatever sources it managed to gather, so hard-failing it here discards usable work.
+  // Only a session with ZERO linked sources is a genuine dead end worth marking timed_out.
   let status: string = session.status;
   let failureReason: string | null = session.failureReason;
   let expectedSources = session.expectedSources;
   let attemptRows = session.attempts;
   if (isStale(session.status, session.updatedAt)) {
-    const reaped = await prisma.researchSession.updateMany({
-      where: { id: session.id, status: { notIn: TERMINAL_STATUSES } },
-      data: { status: "failed", failureReason: "timed_out" },
+    // Close out in-flight attempt rows regardless of which branch below fires — a stale session's
+    // "dispatched"/"discovered" attempts are dead either way (nothing is still fetching them),
+    // so the transparency panel shouldn't show phantom pending sources under either outcome.
+    await prisma.sourceAttempt.updateMany({
+      where: { sessionId: session.id, status: { in: ["dispatched", "discovered"] } },
+      data: { status: "failed", failureReason: "session_ended" },
     });
-    if (reaped.count > 0) {
-      status = "failed";
-      failureReason = "timed_out";
-      // The session is now terminal but any attempt row still in flight (a process-source call
-      // that never landed) would otherwise be stuck at "dispatched"/"discovered" forever — close
-      // those out too so the transparency panel doesn't show phantom pending sources.
-      await prisma.sourceAttempt.updateMany({
-        where: { sessionId: session.id, status: { in: ["dispatched", "discovered"] } },
-        data: { status: "failed", failureReason: "session_ended" },
+
+    const sourceCount = await prisma.sessionSource.count({ where: { sessionId: session.id } });
+
+    if (sourceCount > 0) {
+      // Usable sources exist — flip to synthesizing instead of failing, using the same
+      // race-guarded conditional updateMany pattern as the hop-loss reconciler below (guards
+      // against a concurrent process-source call reaching the same conclusion first). If the
+      // flip loses the race (count === 0), some other request already moved the session past
+      // "stale non-terminal" and this reap has nothing left to do.
+      const flipped = await prisma.researchSession.updateMany({
+        where: { id: session.id, status: { notIn: ["synthesizing", ...TERMINAL_STATUSES] } },
+        data: { status: "synthesizing" },
       });
+      if (flipped.count > 0) {
+        status = "synthesizing";
+        // Same outbound-dispatch pattern as the hop-loss reconciler's synthesize call further
+        // down this file: this GET is user-facing (no INTERNAL_PIPELINE_SECRET on the inbound
+        // request), internalHeaders() adds the secret to this OUTBOUND dispatch.
+        const target = internalUrl(`/api/research/${session.id}/synthesize`, request);
+        waitUntil(
+          dispatchInternal(
+            target,
+            { method: "POST", headers: internalHeaders() },
+            "GET /api/research/[id] stale-reap synthesis"
+          )
+        );
+      }
+    } else {
+      // No linked sources at all — nothing to synthesize from, so this is a genuine dead end.
+      // Keep the original hard-fail behavior.
+      const reaped = await prisma.researchSession.updateMany({
+        where: { id: session.id, status: { notIn: TERMINAL_STATUSES } },
+        data: { status: "failed", failureReason: "timed_out" },
+      });
+      if (reaped.count > 0) {
+        status = "failed";
+        failureReason = "timed_out";
+      }
     }
   }
 
@@ -85,6 +122,12 @@ export async function GET(
   // but the gate keeps the common busy-session path from reconciling prematurely.
   const SESSION_QUIET_MS = 60 * 1000;
   const sessionQuiet = Date.now() - session.updatedAt.getTime() > SESSION_QUIET_MS;
+  // Interaction with the stale-reap synthesis branch above: when that branch fires it already
+  // flips every "dispatched"/"discovered" attempt on this session to "failed" unconditionally, so
+  // the lostHops query below (which only matches status "dispatched") always finds zero rows for
+  // a session that just went through stale-reap synthesis. That keeps this block a no-op for this
+  // request even though status is now "synthesizing" (non-terminal, so it still passes the guard
+  // below) — there is no path here that fires a second synthesize dispatch for the same session.
   if (!isTerminalStatus(status) && sessionQuiet) {
     const attemptCutoff = new Date(Date.now() - ATTEMPT_STALE_MS);
     const lostHops = await prisma.sourceAttempt.updateMany({
