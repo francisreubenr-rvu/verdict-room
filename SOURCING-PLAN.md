@@ -266,3 +266,19 @@ to a real top-5 shortlist: options maxItems 5, pros/cons maxItems 3 (~55 chars),
 explicit "emit AT MOST 5" prompt line, and MAX_FINDINGS 32 -> 24 to shrink the prompt (eases
 TPM admission after the extraction storm and gives the model fewer products to enumerate).
 Output now ~1200-1700 tokens, well under max_tokens 2500 even if the model overshoots.
+
+## 2026-07-23 (cont. 4) — Synthesis 429-admission robustness
+
+3rd verification (session cmrxaev0h): the top-5 bound stopped the truncation, but synthesis
+now sat in "synthesizing" ~90s then failed synthesis_failed - a token-429 exhausting the
+default 2-retry/40s budget. Cause: synthesize runs right after the extraction storm drains
+the 8000 TPM bucket, so it needs to wait out a full ~50s refill, sometimes twice. Fixes
+(pure reliability, no product change): withRateLimitRetry now takes maxRetries/maxDelayMs
+opts; synthesize uses 4 retries at 45s (still < the 300s route budget) while extraction
+keeps the modest 2/40s default. Also shrank the synthesis footprint for easier admission:
+max_tokens 2500 -> 2200, MAX_FINDINGS 24 -> 18.
+
+Standing conclusion on the 8000 TPM ceiling: these fixes make a verdict render reliably
+from whatever is gathered, but the free tier still can't fully PROCESS a 50-source Pro
+query (many extraction 429s trim it to ~20-30). Durable options remain the user's call:
+upgrade Groq to a paid tier, or lower the Pro source cap to ~15-20 to match 8000 TPM.

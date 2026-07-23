@@ -208,15 +208,25 @@ function retryAfterMsFromError(err: unknown): number {
 // retrying the identical payload would just fail identically. Up to 2 retries (3 attempts total),
 // each waiting the real retry-after window (plus a little jitter, capped at 40s) instead of a
 // single flat guess — see retryAfterMsFromError above.
-async function withRateLimitRetry<T>(fn: () => Promise<T>): Promise<T> {
-  const MAX_RETRIES = 2;
+// opts lets the once-per-session synthesize call retry more patiently than the per-source
+// extraction calls (2026-07-23): synthesize runs AFTER the extraction storm has drained the 8000
+// TPM bucket, so its token-429 needs to wait out a full ~50s bucket refill, sometimes more than
+// once as stragglers contend. The default (2 retries, 40s cap) stays right for extraction, where
+// dozens of calls are in flight and long waits would just clog the pipeline. The synthesize call
+// passes a higher maxRetries/maxDelayMs; total wait stays well under the route's 300s budget.
+async function withRateLimitRetry<T>(
+  fn: () => Promise<T>,
+  opts?: { maxRetries?: number; maxDelayMs?: number }
+): Promise<T> {
+  const MAX_RETRIES = opts?.maxRetries ?? 2;
+  const maxDelayMs = opts?.maxDelayMs ?? MAX_RETRY_DELAY_MS;
   for (let attempt = 0; ; attempt++) {
     try {
       return await fn();
     } catch (err) {
       const status = (err as { status?: number } | null)?.status;
       if (status !== 429 || attempt >= MAX_RETRIES) throw err;
-      const waitMs = Math.min(retryAfterMsFromError(err) + 1000 + Math.random() * 1000, MAX_RETRY_DELAY_MS);
+      const waitMs = Math.min(retryAfterMsFromError(err) + 1000 + Math.random() * 1000, maxDelayMs);
       await new Promise((resolve) => setTimeout(resolve, waitMs));
     }
   }
@@ -572,7 +582,7 @@ export async function synthesize(input: {
   // fewer distinct products to want to enumerate (the emit_synthesis output is capped at 5 options
   // below, but a shorter candidate list makes it converge on the strongest ones instead of
   // truncating a long one).
-  const MAX_FINDINGS = 24;
+  const MAX_FINDINGS = 18;
   const MAX_FIELD_CHARS = 150;
   const truncate = (s: string) => (s.length > MAX_FIELD_CHARS ? `${s.slice(0, MAX_FIELD_CHARS)}…` : s);
   const shrink = (f: SynthesisFinding): SynthesisFinding => ({
@@ -589,9 +599,10 @@ export async function synthesize(input: {
   const response = await withRateLimitRetry(() =>
     getGroq().chat.completions.create({
     model: MODEL,
-    // Bumped 2000 -> 2500 (2026-07-23) for output headroom now that options/pros/cons are
-    // bounded below — prompt (~2K tokens) + this still sits well under the 8000 TPM admission.
-    max_tokens: 2500,
+    // 2200 (2026-07-23): a top-5 shortlist with 3 pros/cons each outputs ~1500 tokens, so this
+    // leaves margin against truncation while keeping the request's admission footprint
+    // (prompt + max_tokens) small enough to pass the 8000 TPM check on a post-extraction bucket.
+    max_tokens: 2200,
     tools: [
       {
         type: "function",
@@ -674,7 +685,13 @@ export async function synthesize(input: {
         ].join("\n"),
       },
     ],
-    })
+    }),
+    // Patient retry (2026-07-23): synthesize runs once, right after the extraction storm has
+    // drained the 8000 TPM bucket, so its token-429 must wait out a full ~50s refill (sometimes
+    // twice as stragglers contend). 4 retries at up to 45s each stays well under the route's 300s
+    // budget, versus the extraction default (2 retries / 40s) that is tuned for dozens of
+    // concurrent calls where long waits would clog the pipeline.
+    { maxRetries: 4, maxDelayMs: 45_000 }
   );
 
   const parsed = parseForcedToolCall<{
