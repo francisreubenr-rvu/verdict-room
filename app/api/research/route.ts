@@ -253,7 +253,10 @@ async function continueSearch(
     const result = await generateSearchQueries(query, plan);
     queries = result.queries;
     parsed = result.parsed;
-  } catch {
+  } catch (err) {
+    // Log the actual cause (bad/rate-limited key, wrong model, malformed tool-call) — otherwise a
+    // query_parse_failed session gives no diagnostic in get_runtime_errors (was a bare catch).
+    console.error(`generateSearchQueries failed for session ${sessionId} (query "${query}"):`, err);
     queryParseFailed = true;
   }
 
