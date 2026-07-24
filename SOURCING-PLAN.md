@@ -350,7 +350,11 @@ interleave" slice:
 | Company website | 1 (soft) | Official/manufacturer domains (MANUFACTURER_HOSTS). |
 | Other | 5 (soft) | Community/retail/Q&A/social (OTHER_HOSTS + Reddit). |
 
-Implemented in `app/api/research/route.ts`: `composeFreeTierSources()` + `categorizeFreeSource()`.
+Implemented in `lib/research/compose.ts` (`composeFreeTierSources()` + `categorizeFreeSource()`,
+a pure dep-free module so it's unit-testable), called from `app/api/research/route.ts`.
+Deterministically verified: realistic pool -> 3 YT / 1 company / 2 other / 9 blog = 15; YouTube
+hard-capped at 3 in YT-heavy pools; web-poor pools land below 15 rather than dispatching a 4th
+transcript; underfilled categories backfill from leftover web.
 Pass 1 honors each category's quota (YouTube first, secured at 3); pass 2 backfills to 15 from
 leftover web so an underfilled category (e.g. no manufacturer page found) doesn't waste its slots.
 YouTube is excluded from backfill — never dispatched past 3. Pro plan unchanged (flat 50-cap
