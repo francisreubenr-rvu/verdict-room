@@ -316,3 +316,23 @@ presence), so Groq (fast LPU) is the default again and production works. The NVI
 wired up for a future working provider. The verdict-rendering bottleneck remains Groq's free 8000
 TPM on synthesize(); durable fixes: paid Groq Dev tier (keeps fast inference), or a fast-inference
 free alternative like Cerebras/SambaNova, or lower the source cap so synthesis fits.
+
+## 2026-07-24 — RESOLVED: verdict renders end-to-end on a fresh Groq key
+
+Provider outcome: NVIDIA free never served inference (endpoint returned 0 bytes for every model,
+two different keys). Cerebras free gated new users (402 Payment Required / 404 model-not-in-free-
+catalog). Both dead. The user provisioned a FRESH Groq key (uncontended bucket) and left
+LLM_PROVIDER=cerebras stale in Vercel, so production hit Cerebras and 404'd on every query-parse
+(surfaced only after replacing a bare catch with a real console.error). Fix: gate provider
+selection to a WORKING set (currently just groq) so a stale LLM_PROVIDER can't break prod, and force
+the Groq path.
+
+Result (session cmryixds7, live): status=done in 5m31s, 19 YouTube sources all with transcripts,
+and a full 5-option ranked VERDICT rendered (Pixel 9a #1 @95, Vivo V60, Nothing 4a Pro, Poco X7
+Pro, Moto G Stylus) with a synthesized paragraph. Browser-verified. The fresh, uncontended Groq
+bucket gave synthesize() its token headroom; the top-5 output bound + patient 4x45s retry +
+reconciler carried it home. The whole goal now works end-to-end: YouTube review data via the
+external kome service, multiple sources, maximum transparency, AND a rendered verdict.
+
+Provider map (lib/llm.ts) stays in place: add cerebras/nvidia back to WORKING once either is
+confirmed to serve inference (e.g. a paid tier), no code change beyond that.
