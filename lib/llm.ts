@@ -30,8 +30,14 @@ const PROVIDERS: Record<string, { baseURL: string; key: string | undefined; mode
   cerebras: { baseURL: "https://api.cerebras.ai/v1", key: process.env.CEREBRAS_API_KEY, model: "llama-3.3-70b" },
   nvidia: { baseURL: "https://integrate.api.nvidia.com/v1", key: process.env.NVIDIA_API_KEY, model: "meta/llama-3.3-70b-instruct" },
 };
+// Only providers CONFIRMED to serve this account's inference are honored — cerebras returned 402
+// (no free credits) / 404 (model not in its free catalog) and nvidia's endpoint returned no
+// response at all (2026-07-24), so both are disabled here regardless of LLM_PROVIDER to keep
+// production on the working Groq path (a stale LLM_PROVIDER=cerebras in the env must not break it).
+// Move a provider into WORKING once it's re-confirmed to respond.
+const WORKING = new Set(["groq"]);
 const requested = process.env.LLM_PROVIDER ?? "groq";
-const ACTIVE_PROVIDER = PROVIDERS[requested]?.key ? requested : "groq";
+const ACTIVE_PROVIDER = WORKING.has(requested) && PROVIDERS[requested]?.key ? requested : "groq";
 
 function getLlm(): OpenAI {
   if (!client) {
