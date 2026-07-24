@@ -336,3 +336,22 @@ external kome service, multiple sources, maximum transparency, AND a rendered ve
 
 Provider map (lib/llm.ts) stays in place: add cerebras/nvidia back to WORKING once either is
 confirmed to serve inference (e.g. a paid tier), no code change beyond that.
+
+## 2026-07-24 — Free-tier source composition (cut YouTube token spend)
+
+User request: reduce total sources scanned, and specifically the tokens spent on YouTube
+transcripts. Free tier stays at 15 sources but is now shaped, not a flat "first 15 after
+interleave" slice:
+
+| Category | Quota | Rationale |
+|---|---|---|
+| YouTube | 3 (HARD cap) | A transcript is the most token-expensive source (full video vs. 8K-char web page). This sub-cap is the actual token lever — before, web/youtube interleaving let YouTube eat ~7-8 of the 15 slots. |
+| Review blogs | 6 (soft) | Default web bucket (editorial/review sites). |
+| Company website | 1 (soft) | Official/manufacturer domains (MANUFACTURER_HOSTS). |
+| Other | 5 (soft) | Community/retail/Q&A/social (OTHER_HOSTS + Reddit). |
+
+Implemented in `app/api/research/route.ts`: `composeFreeTierSources()` + `categorizeFreeSource()`.
+Pass 1 honors each category's quota (YouTube first, secured at 3); pass 2 backfills to 15 from
+leftover web so an underfilled category (e.g. no manufacturer page found) doesn't waste its slots.
+YouTube is excluded from backfill — never dispatched past 3. Pro plan unchanged (flat 50-cap
+slice). Pricing copy already says "Up to 15 sources read per query" for free, so no copy drift.
