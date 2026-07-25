@@ -14,6 +14,12 @@ const nextConfig: NextConfig = {
   // from the old experimental `experimental.serverComponentsExternalPackages`) — confirmed
   // against this project's installed Next 16 type defs, node_modules/next/dist/server/config-shared.d.ts.
   serverExternalPackages: ["@browserbasehq/stagehand", "pino", "pino-pretty"],
+  // Marketing imagery is served from Unsplash's CDN (free license, hotlink-permitted). Allow
+  // next/image to optimize it. Only the marketing pages use remote images; product images in
+  // reports come through the app's own product-image route, not next/image.
+  images: {
+    remotePatterns: [{ protocol: "https", hostname: "images.unsplash.com" }],
+  },
 };
 
 export default nextConfig;

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ArrowRight, Check, Minus } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Reveal } from "@/components/reveal";
 import { MarketingFooter } from "@/components/footer";
@@ -28,15 +29,15 @@ const FAQS = [
   },
   {
     q: "Do you delete sponsored reviews?",
-    a: "Never. Sometimes the paid reviewer is right — you just deserve to know they were paid. Sponsored voices are shown separately, labeled with a confidence score, and weighed accordingly in the verdict.",
+    a: "Never. Sometimes the paid reviewer is right, you just deserve to know they were paid. Sponsored voices are shown separately, labeled with a confidence score, and weighed accordingly in the verdict.",
   },
   {
     q: "What counts as one “report”?",
-    a: "One question, one full pipeline run. Re-running the same query within 24 hours is free — it returns your existing report instead of costing you another slot.",
+    a: "One question, one full pipeline run. Re-running the same query within 24 hours is free: it returns your existing report instead of costing you another slot.",
   },
   {
     q: "Is my research history private?",
-    a: "Yes. Your queries are yours — never sold, never used to target you with the very ads we exist to see through. See our privacy page for exactly what we store and which services help fulfill a search.",
+    a: "Yes. Your queries are yours, never sold, never used to target you with the very ads we exist to see through. See our privacy page for exactly what we store and which services help fulfill a search.",
   },
 ];
 
@@ -83,15 +84,15 @@ export default function PricingPage() {
               <div className="my-6 flex flex-col gap-3">
                 {FREE_FEATURES.map((f) => (
                   <div key={f.text} className="flex items-start gap-2.5">
-                    <span className="mt-0.5 flex size-[22px] shrink-0 items-center justify-center rounded-full bg-[#e9dcb4] text-[11px] text-[#5a4a22]">
-                      ✓
+                    <span className="mt-0.5 flex size-[22px] shrink-0 items-center justify-center rounded-full bg-[#e9dcb4] text-[#5a4a22]">
+                      <Check className="size-3" strokeWidth={2.75} />
                     </span>
                     <span className="font-serif text-[15px] leading-relaxed">{f.text}</span>
                   </div>
                 ))}
                 <div className="flex items-start gap-2.5">
-                  <span className="mt-0.5 flex size-[22px] shrink-0 items-center justify-center rounded-full bg-well text-[11px] text-muted-foreground">
-                    –
+                  <span className="mt-0.5 flex size-[22px] shrink-0 items-center justify-center rounded-full bg-well text-muted-foreground">
+                    <Minus className="size-3" strokeWidth={2.5} />
                   </span>
                   <span className="font-serif text-[15px] leading-relaxed text-muted-foreground">
                     Unlimited reports
@@ -100,6 +101,7 @@ export default function PricingPage() {
               </div>
               <Link href="/app" className={cn(buttonVariants({ variant: "outline", size: "lg" }), "mt-auto")}>
                 Start free
+                <ArrowRight />
               </Link>
             </div>
 
@@ -117,14 +119,14 @@ export default function PricingPage() {
                 <span className="font-mono text-xs text-[#a8987a]">/ MONTH</span>
               </div>
               <p className="mt-2.5 font-serif text-[15.5px] text-[#cbbf9e]">
-                For the chronically curious. Billing isn&apos;t live yet — this is the plan, not
+                For the chronically curious. Billing isn&apos;t live yet. This is the plan, not
                 yet a purchase.
               </p>
               <div className="my-6 flex flex-col gap-3">
                 {PRO_FEATURES.map((f) => (
                   <div key={f} className="flex items-start gap-2.5">
-                    <span className="mt-0.5 flex size-[22px] shrink-0 items-center justify-center rounded-full bg-[linear-gradient(145deg,var(--primary-light),var(--primary))] text-[11px] text-primary-foreground">
-                      ✓
+                    <span className="mt-0.5 flex size-[22px] shrink-0 items-center justify-center rounded-full bg-[linear-gradient(145deg,var(--primary-light),var(--primary))] text-primary-foreground">
+                      <Check className="size-3" strokeWidth={2.75} />
                     </span>
                     <span className="font-serif text-[15px] leading-relaxed text-ink-foreground">
                       {f}
@@ -132,9 +134,9 @@ export default function PricingPage() {
                   </div>
                 ))}
                 <p className="mt-1 font-serif text-[14px] leading-relaxed text-[#a8987a]">
-                  Same pipeline, same source count, same paid-voice labeling as Curious — Pro
-                  just removes the monthly cap. We&apos;d rather ship one honest perk than a list
-                  of things we haven&apos;t built yet.
+                  Same pipeline, same source count, same paid-voice labeling as Curious. Pro just
+                  removes the monthly cap. We&apos;d rather ship one honest perk than a list of
+                  things we haven&apos;t built yet.
                 </p>
               </div>
               <button

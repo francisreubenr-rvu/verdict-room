@@ -8,7 +8,7 @@ export interface Faq {
 }
 
 // Split out of app/pricing/page.tsx so the page itself can be a server component with its own
-// `metadata` export — the FAQ toggle was the only reason the whole page needed "use client"
+// `metadata` export. The FAQ toggle was the only reason the whole page needed "use client"
 // (E5 finding).
 export function PricingFaq({ faqs }: { faqs: Faq[] }) {
   const [openFaq, setOpenFaq] = useState<number | null>(null);

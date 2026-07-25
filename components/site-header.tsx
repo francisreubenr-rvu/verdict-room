@@ -27,7 +27,7 @@ export function SiteHeader() {
   useEffect(() => {
     // createClient() throws if Supabase env vars aren't set (e.g. no
     // .env.local yet, pre-M6). Treat that the same as "signed out" rather
-    // than crashing the header — matches fetchRecentSessions()'s fallback.
+    // than crashing the header, matches fetchRecentSessions()'s fallback.
     let supabase: ReturnType<typeof createClient>;
     try {
       supabase = createClient();

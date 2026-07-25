@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { Check, MessageSquare, Scale, SquarePlay } from "lucide-react";
+import { FramedPhoto, PHOTOS } from "@/components/framed-photo";
 
 const STAGES = ["QUEUE", "SEARCH", "FETCH", "EXTRACT", "VERDICT"] as const;
 
@@ -13,7 +15,7 @@ function getReducedMotion() {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-// Purely decorative marketing illustration on the landing page — a looping
+// Purely decorative marketing illustration on the landing page, a looping
 // preview of what the pipeline looks like mid-run. Not wired to any real
 // session; the actual live pipeline lives at /research/[id]. Freezes on the
 // final frame under prefers-reduced-motion instead of looping forever.
@@ -69,7 +71,7 @@ export function HeroDemo() {
                       : "bg-well text-muted-foreground shadow-[var(--shadow-well)]")
                 }
               >
-                {i < activeStage ? "✓" : i + 1}
+                {i < activeStage ? <Check className="size-3.5" strokeWidth={2.75} /> : i + 1}
               </span>
               <span className="font-mono text-[8.5px] tracking-wide text-muted-foreground">
                 {label}
@@ -87,8 +89,9 @@ export function HeroDemo() {
 
         <div className="mt-4 grid grid-cols-2 gap-2.5">
           <div className="rounded-xl bg-card px-3 py-2.5 shadow-[var(--shadow-raised)]">
-            <div className="font-mono text-[9px] font-bold tracking-wide text-muted-foreground">
-              r/ HEADPHONES · 212 💬
+            <div className="flex items-center gap-1 font-mono text-[9px] font-bold tracking-wide text-muted-foreground">
+              <MessageSquare className="size-2.5 shrink-0" strokeWidth={2} />
+              HEADPHONES · 212
             </div>
             <p className="mt-1 font-serif text-xs leading-snug text-foreground">
               &ldquo;Flew 61 legs with these. Buy them.&rdquo;
@@ -101,8 +104,9 @@ export function HeroDemo() {
             <span className="absolute -top-1.5 -right-1 rotate-[-8deg] rounded-md bg-[linear-gradient(145deg,var(--primary-light),var(--primary))] px-1.5 py-0.5 font-mono text-[8px] font-bold text-primary-foreground">
               SPONSORED
             </span>
-            <div className="font-mono text-[9px] font-bold tracking-wide text-muted-foreground">
-              ▶ TECHDAD REVIEWS
+            <div className="flex items-center gap-1 font-mono text-[9px] font-bold tracking-wide text-muted-foreground">
+              <SquarePlay className="size-2.5 shrink-0" strokeWidth={2} />
+              TECHDAD REVIEWS
             </div>
             <p className="mt-1 font-serif text-xs leading-snug text-foreground">
               &ldquo;Honestly? 9/10. Link below!&rdquo;
@@ -112,16 +116,26 @@ export function HeroDemo() {
 
         <div className="mt-3.5 rounded-2xl bg-[linear-gradient(150deg,var(--ink-light),var(--ink))] px-4 py-3 shadow-[var(--shadow-ink)]">
           <div className="flex items-center justify-between">
-            <span className="font-mono text-[9.5px] font-bold tracking-widest text-accent-light">
+            <span className="flex items-center gap-1.5 font-mono text-[9.5px] font-bold tracking-widest text-accent-light">
+              <Scale className="size-3" strokeWidth={2} />
               VERDICT · 61 SOURCES
             </span>
             <span className="rounded-md bg-[linear-gradient(145deg,var(--accent-light),var(--accent))] px-2 py-0.5 font-mono text-[11px] font-bold text-accent-foreground">
               9.1
             </span>
           </div>
-          <p className="mt-1.5 font-serif text-sm text-ink-foreground">
-            Sony WH-1000XM6 — the only pair that wins at 38,000 feet.
-          </p>
+          <div className="mt-2 flex items-center gap-2.5">
+            <FramedPhoto
+              src={PHOTOS.headphones}
+              alt="Sony WH-1000XM6 headphones"
+              rounded="rounded-lg"
+              className="size-11 shrink-0"
+              sizes="44px"
+            />
+            <p className="font-serif text-sm text-ink-foreground">
+              Sony WH-1000XM6: the only pair that wins at 38,000 feet.
+            </p>
+          </div>
         </div>
       </div>
     </div>
